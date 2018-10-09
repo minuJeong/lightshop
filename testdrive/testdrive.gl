@@ -1,9 +1,13 @@
 
-/*
-%%VARIABLE%% will be replaced with consts by python code
+//
+// execute:
+//  - python testdrive.py
+//
+// %%VARIABLE%% will be replaced with consts by python code
+//
+// author: minu jeong
+//
 
-author: minu jeong
-*/
 
 #version 430
 
@@ -14,28 +18,24 @@ author: minu jeong
 // texture resolution
 #define W %%WIDTH%%
 #define H %%HEIGHT%%
-#define CHANNELS %%CHANNEL%%
 
 layout(local_size_x=X, local_size_y=Y) in;
 layout (std430, binding=0) buffer in_0
 {
-    vec4 inxs[1];
+    float inxs[1];
 };
-layout (std430, binding=1) buffer out_0
+
+layout (std430, binding=2) buffer out_0
 {
-    vec4 outxs[1];
+    float outxs[1];
 };
 
 void main()
 {
-    uint groupx = gl_WorkGroupID.x;
-    uint groupy = gl_WorkGroupID.y;
-    uint group_push = groupy * X + groupx;
-
-    uint x = gl_GlobalInvocationID.x;
-    uint y = gl_GlobalInvocationID.y;
-    uint i = groupx + y * W + x;
-    vec3 v = inxs[i].xyz;
-
-    outxs[i] = vec4(groupx, groupx, groupx, 1.0);
+    uint gy = gl_WorkGroupID.y;
+    uint x = gl_LocalInvocationID.x;
+    uint y = gl_LocalInvocationID.y;
+    uint i = gy * W + y * X + x;
+    float v = inxs[i];
+    outxs[i] = float(i);
 }
