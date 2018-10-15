@@ -19,8 +19,8 @@ def source(args):
 
 # W = X * Y  // for each run, handles a row of pixels
 # execute compute shader for H times to complete
-W = 256
-H = 128
+W = 512
+H = 512
 X = W
 Y = 1
 Z = 1
@@ -32,11 +32,17 @@ definer = {
     "Z": Z,
 }
 
+FRAMES = 20
+
 context = moderngl.create_standalone_context(require=430)
 compute_shader = context.compute_shader(source(definer))
 
 # init buffers
-buffer_a_data = np.random.uniform(0.0, 1.0, (H, W, 4)).astype('f4')
+buffer_a_data_r = np.random.uniform(0.0, 1.0, (H, W, 1))
+buffer_a_data = np.ones((H, W, 4)).astype('f4')
+buffer_a_data[:, :, [0, 1, 2]] = buffer_a_data_r[:, :, [0, 0, 0]]
+# buffer_a_data = np.random.uniform(0.0, 1.0, (H, W, 4)).astype('f4')
+print(buffer_a_data.shape)
 buffer_a = context.buffer(buffer_a_data)
 buffer_b_data = np.zeros((H, W, 4)).astype('f4')
 buffer_b = context.buffer(buffer_b_data)
@@ -48,13 +54,13 @@ Image.fromarray(debug_a, "L").save("testdrive_buffer_a_r.png")
 
 last_buffer = buffer_b
 i = 0
-for _ in range(10):
+for _ in range(FRAMES):
     toggle = True if i % 2 else False
     buffer_a.bind_to_storage_buffer(1 if toggle else 0)
     buffer_b.bind_to_storage_buffer(0 if toggle else 1)
     last_buffer = buffer_a if toggle else buffer_b
 
-    compute_shader.run(group_x=H, group_y=1)
+    compute_shader.run(group_x=H + 1, group_y=1)
 
     # print out
     output = np.frombuffer(last_buffer.read(), dtype=np.float32)
@@ -64,22 +70,29 @@ for _ in range(10):
     img.save(f"testdrive_{i}.png")
 
     print(f"executed {i}")
-    time.sleep(0.1)
-
     i += 1
+
+import imageio
+
+imgs = []
+for i in range(FRAMES):
+    imgs.append(imageio.imread(f"testdrive_{i}.png"))
+imageio.mimwrite("testdrive.gif", imgs, "GIF", duration=0.25)
 
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QPixmap
+from PyQt5.QtCore import QMargins
 from PyQt5.QtCore import Qt
 
 app = QtWidgets.QApplication([])
 widget = QtWidgets.QWidget(None, Qt.WindowStaysOnTopHint)
-main_layout = QtWidgets.QVBoxLayout()
-for i in range(10):
+root_layout = QtWidgets.QVBoxLayout()
+root_layout.setSpacing(1)
+for i in range(FRAMES):
     img_label = QtWidgets.QLabel()
     img_label.setPixmap(QPixmap(f"testdrive_{i}.png"))
-    main_layout.addWidget(img_label)
-widget.setLayout(main_layout)
+    root_layout.addWidget(img_label)
+widget.setLayout(root_layout)
 widget.show()
 app.exec()
 
