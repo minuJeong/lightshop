@@ -64,10 +64,10 @@ while True:
     output = output.reshape((H, W, 4))
     output = np.multiply(output, 255).astype(np.int8)
     img = Image.fromarray(output, "RGBA")
-    img.save("testdrive.tiff")
+    img.save(f"testdrive_{i}.tiff")
 
     print(f"executed {i}, {toggle}!")
-    time.sleep(2.0)
+    time.sleep(1.5)
 
     i += 1
 
