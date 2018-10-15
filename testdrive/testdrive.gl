@@ -8,7 +8,6 @@
 // author: minu jeong
 //
 
-
 #version 430
 
 #define X %%X%%
@@ -33,41 +32,43 @@ layout (std430, binding=2) buffer uv_0
     vec2 uvs[1];
 };
 
-#define win_width 3
-#define win_height 3
-#define win_wh 49
-#define median_i 24
-float window[win_wh] = {
+#define win_width 5
+#define win_height 5
+#define win_wh 25
+vec4 window[win_wh] = {
     // should manually initialize this
-    0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0
+    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
+    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
+    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
+    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
+    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0)
 };
 
 void main()
 {
     // define consts
-    const uint gx = gl_WorkGroupID.x;
-    const uint x = gl_LocalInvocationID.x;
-    const uint y = gl_LocalInvocationID.y;
-    const uint group_offset = gx * W;
-    const uint frag_i = y * X + x + group_offset;
+    const int x = int(gl_LocalInvocationID.x);
+    const int y = int(gl_WorkGroupID.x);
+    const int frag_i = x + y * W;
 
-    float aaa = 0.0;
+    int ignored = 0;
     // read window
-    for (uint win_x = -win_width; win_x <= win_width; win_x++)
+    for (int win_x = 0; win_x < win_width; win_x++)
     {
-        for (uint win_y = -win_width; win_y <= win_width; win_y++)
+        for (int win_y = 0; win_y < win_height; win_y++)
         {
-            uint win_i = win_y * (win_width * 2 + 1) + win_x;
-            uint src_i = frag_i + win_i;
-            window[win_i] = inxs[src_i].x;
+            int win_i = win_y * win_width + win_x;
+            int wox = win_x - win_width / 2;
+            int woy = win_y - win_height / 2;
+            int src_i = x + wox + (y + woy) * W;
+            if (src_i < 0 || src_i > W * H)
+            {
+                window[win_i] = vec4(0, 0, 0, 0);
+                ignored++;
+                continue;
+            }
 
-            aaa = inxs[src_i].x;
+            window[win_i] = inxs[src_i];
         }
     }
 
@@ -75,14 +76,15 @@ void main()
     while(true)
     {
         bool is_swapped = false;
-        for (uint win_i = win_wh - 1; win_i > 0; win_i--)
+        for (int win_ii = win_wh - 1; win_ii > 1; win_ii--)
         {
-            if (window[win_i - 1] > window[win_i])
+            vec4 now = window[win_ii];
+            if (now.w == 0.0) { continue; }
+            if (length(window[win_ii - 1]) > length(now))
             {
                 // swap
-                float _temp = window[win_i];
-                window[win_i - 1] = window[win_i];
-                window[win_i] = _temp;
+                window[win_ii] = window[win_ii - 1];
+                window[win_ii - 1] = now;
                 is_swapped = true;
             }
         }
@@ -92,8 +94,9 @@ void main()
             break;
         }
     }
-    float median = window[median_i];
+    int median_i = win_wh / 2 + ignored / 2;
+    vec4 median = window[median_i];
 
-    // return to buffer
-    outxs[frag_i - 1] = vec4(1.0, 0.75, aaa, 1.0);
+    // write to buffer
+    outxs[frag_i] = vec4(median.xyz, 1.0);
 }
