@@ -54,8 +54,7 @@ for _ in range(10):
     buffer_b.bind_to_storage_buffer(0 if toggle else 1)
     last_buffer = buffer_a if toggle else buffer_b
 
-    for x in range(10, H + 1):
-        compute_shader.run(group_x=x, group_y=1)
+    compute_shader.run(group_x=H, group_y=1)
 
     # print out
     output = np.frombuffer(last_buffer.read(), dtype=np.float32)
@@ -68,6 +67,21 @@ for _ in range(10):
     time.sleep(0.1)
 
     i += 1
+
+from PyQt5 import QtWidgets
+from PyQt5.QtGui import QPixmap
+from PyQt5.QtCore import Qt
+
+app = QtWidgets.QApplication([])
+widget = QtWidgets.QWidget(None, Qt.WindowStaysOnTopHint)
+main_layout = QtWidgets.QVBoxLayout()
+for i in range(10):
+    img_label = QtWidgets.QLabel()
+    img_label.setPixmap(QPixmap(f"testdrive_{i}.png"))
+    main_layout.addWidget(img_label)
+widget.setLayout(main_layout)
+widget.show()
+app.exec()
 
 """
 # DEBUG TESTS

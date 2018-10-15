@@ -33,19 +33,19 @@ layout (std430, binding=2) buffer uv_0
     vec2 uvs[1];
 };
 
-#define win_width 3
-#define win_height 3
+#define win_width 7
+#define win_height 7
 #define win_wh 49
 #define median_i 25
-float window[win_wh] = {
+vec4 window[win_wh] = {
     // should manually initialize this
-    0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0
+    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
+    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
+    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
+    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
+    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
+    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
+    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0)
 };
 
 void main()
@@ -56,35 +56,32 @@ void main()
     const int frag_i = x + y * W;
 
     // read window
-    for (int win_x = -win_width; win_x <= win_width; win_x++)
+    for (int win_x = 0; win_x < win_width; win_x++)
     {
-        for (int win_y = -win_height; win_y <= win_height; win_y++)
+        for (int win_y = 0; win_y < win_height; win_y++)
         {
-            int win_i = win_y * W + win_x;
-            int src_i = frag_i + win_i;
-
-            if (win_i < 0 || win_i >= win_wh)
+            int win_i = win_y * win_width + win_x;
+            int wox = win_x - win_width / 2;
+            int woy = win_y - win_height / 2;
+            int src_i = x + wox + (y + woy) * W;
+            if (src_i < 0 || src_i > W * H)
             {
-                window[win_i] = inxs[frag_i].x;
+                window[win_i] = inxs[frag_i];
                 continue;
             }
 
-            window[win_i] = inxs[src_i].x;
+            window[win_i] = inxs[src_i];
         }
     }
 
     // simple bubble sort to find median
-    float sum = 0.0;
     while(true)
     {
-        sum = 0.0;
         bool is_swapped = false;
         for (int win_ii = win_wh - 1; win_ii > 1; win_ii--)
         {
-            float now = window[win_ii];
-            sum += now;
-
-            if (window[win_ii - 1] > now)
+            vec4 now = window[win_ii];
+            if (length(window[win_ii - 1]) > length(now))
             {
                 // swap
                 window[win_ii] = window[win_ii - 1];
@@ -98,12 +95,8 @@ void main()
             break;
         }
     }
-    float median = window[median_i];
+    vec4 median = window[median_i];
 
-    // return to buffer
-    float r = inxs[frag_i].x;
-    float g = r;
-    float b = r;
-    float a = 1.0;
-    outxs[frag_i] = vec4(r, g, b, a);
+    // write to buffer
+    outxs[frag_i] = vec4(median.xyz, 1.0);
 }
