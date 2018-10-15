@@ -36,7 +36,7 @@ layout (std430, binding=2) buffer uv_0
 #define win_width 3
 #define win_height 3
 #define win_wh 49
-#define median_i 24
+#define median_i 25
 float window[win_wh] = {
     // should manually initialize this
     0, 0, 0, 0, 0, 0, 0,
@@ -51,38 +51,44 @@ float window[win_wh] = {
 void main()
 {
     // define consts
-    const uint gx = gl_WorkGroupID.x;
-    const uint x = gl_LocalInvocationID.x;
-    const uint y = gl_LocalInvocationID.y;
-    const uint group_offset = gx * W;
-    const uint frag_i = y * X + x + group_offset;
+    const int x = int(gl_LocalInvocationID.x);
+    const int y = int(gl_WorkGroupID.x);
+    const int frag_i = x + y * W;
 
-    float aaa = 0.0;
     // read window
-    for (uint win_x = -win_width; win_x <= win_width; win_x++)
+    for (int win_x = -win_width; win_x <= win_width; win_x++)
     {
-        for (uint win_y = -win_width; win_y <= win_width; win_y++)
+        for (int win_y = -win_height; win_y <= win_height; win_y++)
         {
-            uint win_i = win_y * (win_width * 2 + 1) + win_x;
-            uint src_i = frag_i + win_i;
-            window[win_i] = inxs[src_i].x;
+            int win_i = win_y * W + win_x;
+            int src_i = frag_i + win_i;
 
-            aaa = inxs[src_i].x;
+            if (win_i < 0 || win_i >= win_wh)
+            {
+                window[win_i] = inxs[frag_i].x;
+                continue;
+            }
+
+            window[win_i] = inxs[src_i].x;
         }
     }
 
     // simple bubble sort to find median
+    float sum = 0.0;
     while(true)
     {
+        sum = 0.0;
         bool is_swapped = false;
-        for (uint win_i = win_wh - 1; win_i > 0; win_i--)
+        for (int win_ii = win_wh - 1; win_ii > 1; win_ii--)
         {
-            if (window[win_i - 1] > window[win_i])
+            float now = window[win_ii];
+            sum += now;
+
+            if (window[win_ii - 1] > now)
             {
                 // swap
-                float _temp = window[win_i];
-                window[win_i - 1] = window[win_i];
-                window[win_i] = _temp;
+                window[win_ii] = window[win_ii - 1];
+                window[win_ii - 1] = now;
                 is_swapped = true;
             }
         }
@@ -95,5 +101,9 @@ void main()
     float median = window[median_i];
 
     // return to buffer
-    outxs[frag_i - 1] = vec4(1.0, 0.75, aaa, 1.0);
+    float r = inxs[frag_i].x;
+    float g = r;
+    float b = r;
+    float a = 1.0;
+    outxs[frag_i] = vec4(r, g, b, a);
 }
