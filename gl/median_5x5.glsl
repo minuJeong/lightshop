@@ -1,8 +1,5 @@
 
 //
-// execute:
-//  - python testdrive.py
-//
 // %%VARIABLE%% will be replaced with consts by python code
 //
 // author: minu jeong

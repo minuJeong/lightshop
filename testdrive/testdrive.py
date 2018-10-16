@@ -78,16 +78,8 @@ for i in range(FRAMES):
 # if you don't want to use imageio, remove this line
 import io
 
-filelike = io.BytesIO(b'')
 output_gif = f"./{OUTPUT_DIRPATH}/debug.gif"
-# imageio.mimwrite(output_gif, imgs, "GIF", duration=0.1)
-with io.BytesIO() as fp:
-    imageio.mimwrite(fp, imgs, "GIF", duration=0.1)
-    print("FP", fp)
-    print("FP READ", fp.read())
-
-print(filelike)
-print(filelike.read())
+imageio.mimwrite(output_gif, imgs, "GIF", duration=0.1)
 
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QMovie
@@ -97,20 +89,26 @@ from PyQt5.QtCore import QByteArray
 from PyQt5.QtCore import QBuffer
 from PyQt5.QtCore import QIODevice
 
+
+class ModernPyQtGL(QtWidgets.QOpenGLWidget):
+    def initializeGL(self):
+        self.context = moderngl.create_context(require=430)
+        self.cs = context.compute_shader(source('../gl/median_5x5.gl', consts))
+        print(self.context)
+
+    def paintGL(self):
+
+        self.update()
+
+    def resizeGL(self, w, h):
+        self.glViewport(0, 0, w, h)
+
 app = QtWidgets.QApplication([])
 widget = QtWidgets.QWidget(None, Qt.WindowStaysOnTopHint)
 root_layout = QtWidgets.QVBoxLayout()
 root_layout.setSpacing(1)
-img_label = QtWidgets.QLabel()
-# debug_gifmov = QMovie(output_gif)
-debug_gifmov_buffer = QBuffer(QByteArray(filelike.read()))
-debug_gifmov_buffer.open(QIODevice.ReadOnly)
-print(debug_gifmov_buffer, type(debug_gifmov_buffer))
-print(debug_gifmov_buffer.data())
-debug_gifmov = QMovie(debug_gifmov_buffer, b"GIF")
-img_label.setMovie(debug_gifmov)
-debug_gifmov.start()
-root_layout.addWidget(img_label)
+gl_box = ModernPyQtGL()
+root_layout.addWidget(gl_box)
 widget.setLayout(root_layout)
 widget.show()
 app.exec()
