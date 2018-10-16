@@ -1,4 +1,6 @@
 __pycache__/
 qtcreate/
-testdrive/*.png
-testdrive/*.gif
+
+*.tiff
+*.png
+*.gif
