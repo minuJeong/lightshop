@@ -1,30 +1,37 @@
 
-from itertools import product
-import time
-import math
+'''
+    example of using compute shader.
 
-import numpy as np
+    requirements:
+     - numpy
+     - imageio (for output)
+'''
+
+import os
+
 import moderngl
+import numpy as np
+import imageio  # for output
 
-from PIL import Image
 
-
-def source(args):
-    with open('testdrive.gl') as fp:
+def source(uri, consts):
+    ''' read gl code '''
+    with open(uri, 'r') as fp:
         content = fp.read()
 
-    for key, value in args.items():
+    # feed constant values
+    for key, value in consts.items():
         content = content.replace(f"%%{key}%%", str(value))
     return content
 
 # W = X * Y  // for each run, handles a row of pixels
 # execute compute shader for H times to complete
-W = 512
-H = 512
+W = 173
+H = 111
 X = W
 Y = 1
 Z = 1
-definer = {
+consts = {
     "W": W,
     "H": H,
     "X": X + 1,
@@ -32,66 +39,78 @@ definer = {
     "Z": Z,
 }
 
-FRAMES = 20
+FRAMES = 50
+OUTPUT_DIRPATH = "./output"
+
+if not os.path.isdir(OUTPUT_DIRPATH):
+    os.makedirs(OUTPUT_DIRPATH)
 
 context = moderngl.create_standalone_context(require=430)
-compute_shader = context.compute_shader(source(definer))
+compute_shader = context.compute_shader(source('../gl/median_5x5.gl', consts))
 
 # init buffers
-buffer_a_data_r = np.random.uniform(0.0, 1.0, (H, W, 1))
-buffer_a_data = np.ones((H, W, 4)).astype('f4')
-buffer_a_data[:, :, [0, 1, 2]] = buffer_a_data_r[:, :, [0, 0, 0]]
-# buffer_a_data = np.random.uniform(0.0, 1.0, (H, W, 4)).astype('f4')
-print(buffer_a_data.shape)
+buffer_a_data = np.random.uniform(0.0, 1.0, (H, W, 4)).astype('f4')
 buffer_a = context.buffer(buffer_a_data)
 buffer_b_data = np.zeros((H, W, 4)).astype('f4')
 buffer_b = context.buffer(buffer_b_data)
 
-# debug buffer a
-debug_a = buffer_a_data[:, :, 0]
-debug_a = np.multiply(debug_a, 255.0).astype(np.uint8).reshape((H, W))
-Image.fromarray(debug_a, "L").save("testdrive_buffer_a_r.png")
-
+imgs = []
 last_buffer = buffer_b
-i = 0
-for _ in range(FRAMES):
+for i in range(FRAMES):
     toggle = True if i % 2 else False
     buffer_a.bind_to_storage_buffer(1 if toggle else 0)
     buffer_b.bind_to_storage_buffer(0 if toggle else 1)
+
+    # toggle 2 buffers as input and output
     last_buffer = buffer_a if toggle else buffer_b
 
-    compute_shader.run(group_x=H + 1, group_y=1)
+    # local invocation id x -> pixel x
+    # work groupid x -> pixel y
+    # eg) buffer[x, y] = gl_LocalInvocationID.x + gl_WorkGroupID.x * W
+    compute_shader.run(group_x=H, group_y=1)
 
     # print out
     output = np.frombuffer(last_buffer.read(), dtype=np.float32)
     output = output.reshape((H, W, 4))
     output = np.multiply(output, 255).astype(np.uint8)
-    img = Image.fromarray(output, "RGBA")
-    img.save(f"testdrive_{i}.png")
+    imgs.append(output)
 
-    print(f"executed {i}")
-    i += 1
+# if you don't want to use imageio, remove this line
+import io
 
-import imageio
+filelike = io.BytesIO(b'')
+output_gif = f"./{OUTPUT_DIRPATH}/debug.gif"
+# imageio.mimwrite(output_gif, imgs, "GIF", duration=0.1)
+with io.BytesIO() as fp:
+    imageio.mimwrite(fp, imgs, "GIF", duration=0.1)
+    print("FP", fp)
+    print("FP READ", fp.read())
 
-imgs = []
-for i in range(FRAMES):
-    imgs.append(imageio.imread(f"testdrive_{i}.png"))
-imageio.mimwrite("testdrive.gif", imgs, "GIF", duration=0.25)
+print(filelike)
+print(filelike.read())
 
 from PyQt5 import QtWidgets
-from PyQt5.QtGui import QPixmap
-from PyQt5.QtCore import QMargins
+from PyQt5.QtGui import QMovie
 from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QMargins
+from PyQt5.QtCore import QByteArray
+from PyQt5.QtCore import QBuffer
+from PyQt5.QtCore import QIODevice
 
 app = QtWidgets.QApplication([])
 widget = QtWidgets.QWidget(None, Qt.WindowStaysOnTopHint)
 root_layout = QtWidgets.QVBoxLayout()
 root_layout.setSpacing(1)
-for i in range(FRAMES):
-    img_label = QtWidgets.QLabel()
-    img_label.setPixmap(QPixmap(f"testdrive_{i}.png"))
-    root_layout.addWidget(img_label)
+img_label = QtWidgets.QLabel()
+# debug_gifmov = QMovie(output_gif)
+debug_gifmov_buffer = QBuffer(QByteArray(filelike.read()))
+debug_gifmov_buffer.open(QIODevice.ReadOnly)
+print(debug_gifmov_buffer, type(debug_gifmov_buffer))
+print(debug_gifmov_buffer.data())
+debug_gifmov = QMovie(debug_gifmov_buffer, b"GIF")
+img_label.setMovie(debug_gifmov)
+debug_gifmov.start()
+root_layout.addWidget(img_label)
 widget.setLayout(root_layout)
 widget.show()
 app.exec()
