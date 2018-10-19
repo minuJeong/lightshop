@@ -52,6 +52,7 @@ class NodeWidget(QtWidgets.QOpenGLWidget):
 
     def __init__(self):
         super(NodeWidget, self).__init__()
+        self.viewport = (0, 0, 100, 100)
 
     def init_node(self):
         raise NotImplemented
@@ -60,7 +61,6 @@ class NodeWidget(QtWidgets.QOpenGLWidget):
         raise NotImplemented
 
     def paintGL(self):
-        self.context.clear(0.0, 0.0, 0.5)
         self.context.viewport = self.viewport
         self.render()
         self.update()
@@ -68,25 +68,8 @@ class NodeWidget(QtWidgets.QOpenGLWidget):
     def initializeGL(self):
         if not self.context:
             self.context = mgl.create_context()
+        self.context.clear(0.0, 0.0, 0.5)
         self.init_node()
-
-class DepthmapNode(NodeWidget):
-    def __init__(self):
-        super(DepthmapNode, self).__init__()
-
-    def init_node(self, img=None):
-        if not img:
-            img = Image.new("RGBA", (1, 1))
-        self.device = PassThrough2D(self.context, img)
-        self.viewport = (0, 0, 5, 5)
-
-    def render(self):
-        self.device.render()
-
-    # called by qt framework
-    def mousePressEvent(self, e):
-        print(self, "click", self.context)
-
 
 class NormalmapNode(NodeWidget):
     def __init__(self):
@@ -98,8 +81,7 @@ class NormalmapNode(NodeWidget):
         self.device = DepthToNormal(self.context, img)
 
     def render(self):
-        # self.device.render()
-        pass
+        self.device.render()
 
     # called by qt framework
     def mousePressEvent(self, e):
@@ -107,13 +89,7 @@ class NormalmapNode(NodeWidget):
 
 
 class Tool(QObject):
-    depthmap_update_signal = pyqtSignal()
-    normalmap_update_signal = pyqtSignal()
-
-    depth_node = None
     normalmap_node = None
-
-    _path = "D:/Box/Box Sync/Drawing/DRAW_2018/10/sfjifjsi333311117676786.psd"
 
     @property
     def path(self):
@@ -125,22 +101,6 @@ class Tool(QObject):
 
     def __init__(self, tool_window):
         super(Tool, self).__init__()
-        self.psdloader = PSDLoader()
-        self.psdloader.complete_load_signal.connect(lambda: print("finish refresh psd"))
-
-    def refresh_psd(self):
-        """ read psd file again """
-        self.psdloader.refresh(self.path)
-
-        if self.depth_node:
-            self.depth_node.init_node(
-                self.psdloader.depth_img
-            )
-
-        if self.normalmap_node:
-            self.depth_node.init_node(
-                self.psdloader.depth_img
-            )
 
 
 class ToolWindow(Ui_window, QObject):
@@ -150,28 +110,24 @@ class ToolWindow(Ui_window, QObject):
         super(ToolWindow, self).__init__()
         Ui_window.setupUi(self, qt_win)
 
+        self.qt_win = qt_win
+
         self.tool = Tool(self)
-        self.tool.depth_node = DepthmapNode()
         self.tool.normalmap_node = NormalmapNode()
 
-        self.le_psdpath.setText(self.tool.path)
-        self.hl_canvasgroup.addWidget(self.tool.depth_node)
         self.hl_canvasgroup.addWidget(self.tool.normalmap_node)
 
-        self.b_exit.clicked.connect(partial(self.b_exit_clicked, qt_win))
+        self.b_exit.clicked.connect(lambda e: qt_win.close())
         self.b_refresh.clicked.connect(self.refresh_psd)
 
-    def b_exit_clicked(self, qt_win, clicked=False):
-        qt_win.close()
-
     def refresh_psd(self, clicked=False):
-        self.tool.refresh_psd()
+        print('not implemented')
 
 
 def main():
     app = QtWidgets.QApplication([])
     qt_win = QtWidgets.QMainWindow(None, Qt.WindowStaysOnTopHint)
-    ToolWindow(qt_win)
+    tool = ToolWindow(qt_win)
     qt_win.show()
     app.exec()
 

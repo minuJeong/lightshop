@@ -25,10 +25,10 @@ class _Loader(object):
     ]).astype('f4').tobytes()
 
     quad_uvs = np.array([
-        0.0, 0.0,
         0.0, 1.0,
+        0.0, 0.0,
+        1.0, 1.0,
         1.0, 0.0,
-        1.0, 1.0
     ]).astype('f4').tobytes()
 
     quad_indices = np.array([

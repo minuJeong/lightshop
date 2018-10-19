@@ -19,7 +19,4 @@ class DepthToNormal(_Loader):
         super(DepthToNormal, self).__init__()
         self.context = gl_context
         self.build_quad_vao(self.context, img, "./gl/depth_to_normal.frag")
-
-    def render(self):
-        self.texture.use(0)
-        self.context.vertex_array(self.program, self.vbo, self.ibo).render()
+        self.render = self.vao.render
