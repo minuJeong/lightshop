@@ -8,11 +8,11 @@ import moderngl
 from PIL import Image
 
 
-def source(args):
-    with open('testdrive.gl') as fp:
+def source(src, consts):
+    with open(src) as fp:
         content = fp.read()
 
-    for key, value in args.items():
+    for key, value in consts.items():
         content = content.replace(f"%%{key}%%", str(value))
     return content
 
@@ -23,7 +23,7 @@ Y = 1
 Z = 1
 W = 512
 H = 512
-definer = {
+consts = {
     "X": X,
     "Y": Y,
     "Z": Z,
@@ -32,7 +32,7 @@ definer = {
 }
 
 context = moderngl.create_standalone_context(require=430)
-compute_shader = context.compute_shader(source(definer))
+compute_shader = context.compute_shader(source('../gl/median_5x5.glsl', consts))
 
 _scale = 1.0
 
@@ -50,7 +50,6 @@ buffer_s.bind_to_storage_buffer(2)
 last_buffer = buffer_b
 i = 0
 while True:
-
     toggle = i % 2
     buffer_a.bind_to_storage_buffer(1 if toggle else 0)
     buffer_b.bind_to_storage_buffer(0 if toggle else 1)
@@ -70,17 +69,3 @@ while True:
     time.sleep(1.5)
 
     i += 1
-
-"""
-# DEBUG TIFF EXPORTING
-
-data = []
-C = W + H
-for x in range(W):
-    for y in range(H):
-        v = (x + y) / C
-        data.append((v, v, v))
-data = np.array(data).reshape((W, H, 3))
-img = Image.fromarray(np.multiply(data, 255.0).astype(np.int8), "RGB")
-img.save("uvs.tiff")
-"""
