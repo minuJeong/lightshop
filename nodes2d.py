@@ -15,8 +15,12 @@ class PassThrough2D(_Loader):
 
 
 class DepthToNormal(_Loader):
-    def __init__(self, gl_context, img):
+    def __init__(self, gl_context, img, aspect):
         super(DepthToNormal, self).__init__()
         self.context = gl_context
-        self.build_quad_vao(self.context, img, "./gl/depth_to_normal.frag")
+
+        self.recompile_shader("./gl/depth_to_normal.frag")
+        self.rebuild_texture(img)
+        self.rebuild_quad(aspect)
+
         self.render = self.vao.render
