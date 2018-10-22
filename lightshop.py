@@ -52,7 +52,7 @@ class NodeWidget(QtWidgets.QOpenGLWidget):
 
     def __init__(self):
         super(NodeWidget, self).__init__()
-        self.viewport = (10, 10, self.width() - 10, self.height() - 10)
+        self.viewport = (10, 10, self.width() - 20, self.height() - 20)
 
     def init_node(self):
         raise NotImplemented
@@ -79,7 +79,7 @@ class NormalmapNode(NodeWidget):
         if not img:
             img = Image.new("RGBA", (1, 1))
 
-        aspect = (self.height() - 10) / (self.width() - 10)
+        aspect = (self.height() - 20) / (self.width() - 20)
         print(aspect)
         self.device = DepthToNormal(self.context, img, aspect)
 
