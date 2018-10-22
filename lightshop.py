@@ -52,7 +52,7 @@ class NodeWidget(QtWidgets.QOpenGLWidget):
 
     def __init__(self):
         super(NodeWidget, self).__init__()
-        self.viewport = (10, 10, self.width() - 20, self.height() - 20)
+        self.viewport = (0, 0, self.width() - 20, self.height() - 20)
 
     def init_node(self):
         raise NotImplemented
@@ -75,16 +75,39 @@ class NormalmapNode(NodeWidget):
     def __init__(self):
         super(NormalmapNode, self).__init__()
 
-    def init_node(self, img=None):
-        if not img:
-            img = Image.new("RGBA", (1, 1))
-
-        aspect = (self.height() - 20) / (self.width() - 20)
-        print(aspect)
+    def init_node(self):
+        size = (512, 512)
+        channels = 3
+        array = np.random.uniform(0, 255, (*size, channels)).astype(np.uint8)
+        img = Image.fromarray(array)
+        aspect = self.width() / self.height()
         self.device = DepthToNormal(self.context, img, aspect)
 
     def render(self):
         self.device.render()
+
+        size = (512, 512)
+        channels = 3
+
+        fb = self.context.simple_framebuffer(size)
+        fb.use()
+        self.device.render()
+
+        fb_data = fb.read()
+        img = Image.frombytes("RGB", size, fb_data)
+        img.transpose(Image.ROTATE_90)
+
+        array = np.random.uniform(0, 255, (*size, channels)).astype(np.uint8)
+        add_img = Image.fromarray(array)
+
+        img = Image.blend(img, add_img, 0.2)
+
+        self.device.rebuild_texture(img)
+
+        img = None
+        add_img = None
+        del img
+        del add_img
 
     # called by qt framework
     def mousePressEvent(self, e):

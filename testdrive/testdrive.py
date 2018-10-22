@@ -4,7 +4,7 @@ import math
 
 import numpy as np
 import moderngl
-
+import imageio
 from PIL import Image
 
 
@@ -16,13 +16,11 @@ def source(src, consts):
         content = content.replace(f"%%{key}%%", str(value))
     return content
 
-# W = X * Y  // for each run, handles one line of pixels
-# execute compute shader for H times to complete
-X = 512
+W = 1280
+H = 720
 Y = 1
 Z = 1
-W = 512
-H = 512
+X = W
 consts = {
     "X": X,
     "Y": Y,
@@ -48,24 +46,22 @@ buffer_s = context.buffer(grid.astype('f4'))
 buffer_s.bind_to_storage_buffer(2)
 
 last_buffer = buffer_b
-i = 0
-while True:
+
+imgs = []
+for i in range(48):
     toggle = i % 2
     buffer_a.bind_to_storage_buffer(1 if toggle else 0)
     buffer_b.bind_to_storage_buffer(0 if toggle else 1)
     last_buffer = buffer_a if toggle else buffer_b
 
-    for x in range(1, H + 1):
-        compute_shader.run(group_x=x, group_y=1)
+    compute_shader.run(group_x=H, group_y=1)
 
     # print out
     output = np.frombuffer(last_buffer.read(), dtype=np.float32)
     output = output.reshape((H, W, 4))
-    output = np.multiply(output, 255).astype(np.int8)
-    img = Image.fromarray(output, "RGBA")
-    img.save(f"testdrive_{i}.tiff")
+    output = np.multiply(output, 255).astype(np.uint8)
+    imgs.append(output)
 
     print(f"executed {i}, {toggle}!")
-    time.sleep(1.5)
 
-    i += 1
+imageio.mimwrite("./output/out.gif", imgs, duration=0.1)

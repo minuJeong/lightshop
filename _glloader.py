@@ -18,10 +18,10 @@ def _load_file(file):
 
 class _Loader(object):
     quad_uvs = np.array([
-        0.0, 1.0,
         0.0, 0.0,
-        1.0, 1.0,
+        0.0, 1.0,
         1.0, 0.0,
+        1.0, 1.0,
     ]).astype('f4').tobytes()
 
     quad_indices = np.array([
@@ -48,14 +48,13 @@ class _Loader(object):
         )
 
     def rebuild_texture(self, img):
-        if not img:
-            print("no image for texture provided")
-            return
         if not self.context:
             print("no gl context provided")
             return
 
-        self.texture = self.context.texture(img.size, 4, img.tobytes())
+        data = img.tobytes()
+        channels = int(len(data) / (img.width * img.height))
+        self.texture = self.context.texture(img.size, channels, data)
 
     def rebuild_quad(self, aspect):
         if not self.context:

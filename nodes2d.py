@@ -18,9 +18,11 @@ class DepthToNormal(_Loader):
     def __init__(self, gl_context, img, aspect):
         super(DepthToNormal, self).__init__()
         self.context = gl_context
-
         self.recompile_shader("./gl/depth_to_normal.frag")
-        self.rebuild_texture(img)
+        if img:
+            self.rebuild_texture(img)
         self.rebuild_quad(aspect)
 
-        self.render = self.vao.render
+    def render(self):
+        self.texture.use(location=0)
+        self.vao.render()
