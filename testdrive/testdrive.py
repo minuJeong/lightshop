@@ -1,4 +1,4 @@
-
+7
 import time
 import math
 
@@ -31,24 +31,13 @@ consts = {
 
 context = moderngl.create_standalone_context(require=430)
 compute_shader = context.compute_shader(source('../gl/median_5x5.glsl', consts))
-
-_scale = 1.0
-
-grid = []
-for u in np.linspace(0.0, 1.0, W):
-    for v in np.linspace(0.0, 1.0, H):
-        grid.append([u, v])
-grid = np.array(grid).reshape((W, H, 2))
-
-buffer_a = context.buffer(np.random.uniform(0.0, _scale, (W, H, 4)).astype('f4'))
+buffer_a = context.buffer(np.random.uniform(0.0, 1.0, (W, H, 4)).astype('f4'))
 buffer_b = context.buffer(np.ones((W, H, 4)).astype('f4'))
-buffer_s = context.buffer(grid.astype('f4'))
-buffer_s.bind_to_storage_buffer(2)
-
-last_buffer = buffer_b
+print("finished setting up buffers")
 
 imgs = []
-for i in range(48):
+last_buffer = buffer_b
+for i in range(120):
     toggle = i % 2
     buffer_a.bind_to_storage_buffer(1 if toggle else 0)
     buffer_b.bind_to_storage_buffer(0 if toggle else 1)
@@ -64,4 +53,11 @@ for i in range(48):
 
     print(f"executed {i}, {toggle}!")
 
-imageio.mimwrite("./output/out.gif", imgs, duration=0.1)
+# make it ping-pong
+imgs_org = imgs[:]
+imgs.reverse()
+print("finished copy for ping pong")
+
+imageio.mimwrite("./output/out.mp4", imgs_org + imgs, fps=24, quality=10)
+
+print("done!")
