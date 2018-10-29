@@ -55,28 +55,34 @@ simple_fragment_shader_code = """
 # calc position with compute shader
 compute_worker_shader_code = """
 #version 430
+#define GROUP_SIZE %COMPUTE_SIZE%
 
-layout(local_size_x=%COMPUTE_SIZE%) in;
-layout(binding=0) buffer balls_in
+layout(local_size_x=GROUP_SIZE) in;
+
+struct Ball
 {
-    vec4 pos[1];
-    vec4 vel[1];
-    vec4 col[1];
+    vec4 pos;
+    vec4 vel;
+    vec4 col;
+};
+
+layout(std430, binding=0) buffer balls_in
+{
+    Ball balls[];
 } In;
-layout(binding=1) buffer balls_out
+layout(std430, binding=1) buffer balls_out
 {
-    vec4 pos[1];
-    vec4 vel[1];
-    vec4 col[1];
+    Ball balls[];
 } Out;
 
 void main()
 {
-    int x = int(gl_LocalInvocationIndex);
+    int x = int(gl_GlobalInvocationID);
 
-    vec4 p = In.pos[x];
-    vec4 v = In.vel[x];
-    vec4 c = In.col[x];
+    Ball in_ball = In.balls[x];
+
+    vec4 p = in_ball.pos.xyzw;
+    vec4 v = in_ball.vel.xyzw;
 
     p.xy += v.xy;
 
@@ -84,28 +90,33 @@ void main()
     if (p.x - rad <= -1.0)
     {
         p.x = -1.0 + rad;
-        v.x *= -1.0;
+        v.x *= -0.98;
     }
     else if (p.x + rad >= 1.0)
     {
         p.x = 1.0 - rad;
-        v.x *= -1.0;
+        v.x *= -0.98;
     }
 
     if (p.y - rad <= -1.0)
     {
         p.y = -1.0 + rad;
-        v.y *= -1.0;
+        v.y *= -0.98;
     }
     else if (p.y + rad >= 1.0)
     {
         p.y = 1.0 - rad;
-        v.y *= -1.0;
+        v.y *= -0.98;
     }
 
-    Out.pos[x] = p;
-    Out.vel[x] = v;
-    Out.col[x] = c;
+    Ball out_ball;
+    out_ball.pos.xyzw = p.xyzw;
+    out_ball.vel.xyzw = v.xyzw;
+
+    vec4 c = in_ball.col.xyzw;
+    out_ball.col.xyzw = c.xyzw;
+
+    Out.balls[x] = out_ball;
 }
 """
 
@@ -113,14 +124,14 @@ void main()
 class ComputeToggleTimer(QtCore.QThread):
     compute_update_signal = QtCore.pyqtSignal(bool)
 
-    def __init__(self, group_x):
+    def __init__(self):
         super(ComputeToggleTimer, self).__init__()
         self.toggle_buffer = False
 
     def run(self):
         while True:
-            self.toggle_buffer = not self.toggle_buffer
             self.compute_update_signal.emit(self.toggle_buffer)
+            self.toggle_buffer = not self.toggle_buffer
             self.msleep(32)
 
 
@@ -129,6 +140,8 @@ class Renderer(QtWidgets.QOpenGLWidget):
     STRUCT_SIZE = 12
 
     worker_thread = None
+
+    is_running_computeshader = False
 
     def __init__(self):
         super(Renderer, self).__init__()
@@ -147,19 +160,20 @@ class Renderer(QtWidgets.QOpenGLWidget):
 
         self.compute_buffer_a.bind_to_storage_buffer(a)
         self.compute_buffer_b.bind_to_storage_buffer(b)
-
         self.compute_shader.run(group_x=Renderer.STRUCT_SIZE)
 
-        if False:
-            data = np.frombuffer(self.target_buffer.read(), dtype='f4')
-            data = data.reshape((Renderer.COUNT, Renderer.STRUCT_SIZE))
-            np.set_printoptions(threshold=np.nan)
-            with open('debug.log', 'w') as fp:
-                fp.write(f'x, y \t| vx, vy \t| r, g, b\n')
-                for line in data:
-                    fp.write(f'{line[0]:.2f}, {line[1]:.2f}    \t| ')
-                    fp.write(f'{line[4]:.2f}, {line[5]:.2f}    \t| ')
-                    fp.write(f'{line[8]:.2f}, {line[9]:.2f}, {line[10]:.2f}  \n')
+        """
+        # DEBUG
+        data = np.frombuffer(self.target_buffer.read(), dtype='f4')
+        data = data.reshape((Renderer.COUNT, Renderer.STRUCT_SIZE))
+        np.set_printoptions(threshold=np.nan)
+        with open('debug.log', 'w') as fp:
+            fp.write(f'x, y \t| vx, vy \t| r, g, b\n')
+            for line in data:
+                fp.write(f'{line[0]:.2f}, {line[1]:.2f}    \t| ')
+                fp.write(f'{line[4]:.2f}, {line[5]:.2f}    \t| ')
+                fp.write(f'{line[8]:.2f}, {line[9]:.2f}, {line[10]:.2f}  \n')
+        """
 
     def initializeGL(self):
         self.context = mg.create_context()
@@ -194,27 +208,30 @@ class Renderer(QtWidgets.QOpenGLWidget):
             y = math.sin(_angle) * _dist
             z = 0.0
             w = radius
-            _v = random.random() * 0.045 + 0.025
+            _v = random.random() * 0.025 + 0.025
             vx = math.cos(_angle) * _v
             vy = math.sin(_angle) * _v
             vz = 0.0
             vw = 0.0
-            r = random.random()
-            g = random.random()
-            b = random.random()
-            a = 0.0
+            r = 1.0 * random.random()
+            g = 1.0 * random.random()
+            b = 1.0 * random.random()
+            a = 1.0
+
+            x, y, z, w, vx, vy, vz, vw, r, g, b, a = list(map(float, [x, y, z, w, vx, vy, vz, vw, r, g, b, a]))
 
             # match bytes
             compute_data.append(
-                [x, y, z, w,  vx, vy, vz, vw,  r, g, b, a])
+                [[x, y, z, w],  [vx, vy, vz, vw],  [r, g, b, a]])
 
-        compute_databytes = np.array(compute_data).astype('f4').tobytes()
+        compute_data = np.array(compute_data).astype('f4')
+        compute_data_bytes = compute_data.tobytes()
 
-        self.compute_buffer_a = self.context.buffer(compute_databytes)
-        self.compute_buffer_b = self.context.buffer(compute_databytes)
+        self.compute_buffer_a = self.context.buffer(compute_data_bytes)
+        self.compute_buffer_b = self.context.buffer(compute_data_bytes)
         self.target_buffer = self.compute_buffer_b
 
-        self.timer_thread = ComputeToggleTimer(Renderer.STRUCT_SIZE)
+        self.timer_thread = ComputeToggleTimer()
         self.timer_thread.compute_update_signal.connect(self.update_computeworker)
         self.timer_thread.start()
 
@@ -253,7 +270,6 @@ class Renderer(QtWidgets.QOpenGLWidget):
                 self.program, bo, self.index_buffer
             ).render()
         self.update()
-
         self.context.clear(0, 0, 0)
 
 
