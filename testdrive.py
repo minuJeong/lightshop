@@ -133,7 +133,7 @@ void main()
             float a = d.x != 0.0 ? atan(d.y, d.x) : 3.1415;
             vec2 unit_revert = vec2(cos(a), sin(a));
             p.xy = op.xy - unit_revert * sr;
-            v.xy = unit_revert * scale_v * -0.5;
+            v.xy = unit_revert * scale_v * -0.25;
         }
     }
 
