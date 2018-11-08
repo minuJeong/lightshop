@@ -58,6 +58,18 @@ void main()
 }
 """
 
+simple_bg_fragment_shader_code = """
+#version 430
+
+in vec3 v_col;
+out vec4 out_color;
+void main()
+{
+    vec3 c = v_col;
+    out_color = vec4(c, 1.0);
+}
+"""
+
 # calc position with compute shader
 compute_advance_worker_shader_code = """
 #version 430
@@ -186,32 +198,23 @@ class Renderer(QtWidgets.QOpenGLWidget):
 
     def __init__(self, framerate_label):
         super(Renderer, self).__init__()
-        W, H = 300, 300
+        W, H = 512, 512
         self.setMinimumSize(W, H)
         self.setMaximumSize(W, H)
         self.viewport = (0, 0, W, H)
         self.toggle = False
         self.framerate_label = framerate_label
-
-    def update_computeworker(self, delta_time):
-        if self.toggle:
-            self.compute_buffer_a.bind_to_storage_buffer(0)
-            self.compute_buffer_b.bind_to_storage_buffer(1)
-        else:
-            self.compute_buffer_a.bind_to_storage_buffer(1)
-            self.compute_buffer_b.bind_to_storage_buffer(0)
-        self.toggle = not self.toggle
-        self.compute_shader_advance.run(group_x=Renderer.STRUCT_SIZE)
-        self.compute_complete_signal.emit()
-
-        if delta_time:
-            self.framerate_label.setText(f"Framerate: {1.0 / delta_time}")
+        self.vaos = []
 
     def initializeGL(self):
         self.context = mg.create_context()
         self.program = self.context.program(
             vertex_shader=simple_vertex_shader_code,
             fragment_shader=simple_fragment_shader_code)
+
+        self.bg_program = self.context.program(
+            vertex_shader=simple_vertex_shader_code,
+            fragment_shader=simple_bg_fragment_shader_code)
 
         index_data = np.array([
             0, 1, 2,
@@ -260,48 +263,109 @@ class Renderer(QtWidgets.QOpenGLWidget):
 
         self.compute_buffer_a = self.context.buffer(compute_data_bytes)
         self.compute_buffer_b = self.context.buffer(compute_data_bytes)
-        self.target_buffer = self.compute_buffer_a
+        self.target_buffer = self.compute_buffer_b
+
+        bg_quad = self.vbo_data.copy()[:, [0, 1, 4, 5, 6]]
+        bg_quad[:, [2, 3, 4]] = (0.5, 0.1, 0.25)
+        self.background_quad = self.context.vertex_array(
+            self.bg_program,
+            [(
+                self.context.buffer(bg_quad.tobytes()),
+                '2f 3f',
+                'in_vert', 'in_col'
+            )],
+            self.index_buffer)
 
         self.timer_thread = ComputeToggleTimer(self.compute_complete_signal)
         self.timer_thread.compute_update_signal.connect(self.update_computeworker)
         self.timer_thread.start()
 
-    def paintGL(self):
-        self.context.viewport = self.viewport
-        data = np.frombuffer(self.target_buffer.read(), dtype='f4')
+        self.debug_texture = self.context.texture((512, 512), 3, dtype='f4')
+        self.framebuffer = self.context.framebuffer(self.debug_texture)
+
+        self.idx = 0
+        self.recording = []
+
+    def update_computeworker(self, delta_time):
+        if self.toggle:
+            self.compute_buffer_a.bind_to_storage_buffer(0)
+            self.compute_buffer_b.bind_to_storage_buffer(1)
+            target_buffer = self.compute_buffer_b
+        else:
+            self.compute_buffer_a.bind_to_storage_buffer(1)
+            self.compute_buffer_b.bind_to_storage_buffer(0)
+            target_buffer = self.compute_buffer_a
+        self.toggle = not self.toggle
+        self.compute_shader_advance.run(group_x=Renderer.STRUCT_SIZE)
+        self.target_buffer = target_buffer
+
+        # display framerate
+        if delta_time:
+            self.framerate_label.setText(f"Framerate: {1.0 / delta_time:.2f}")
+
+        self.compute_complete_signal.emit()
+
+    def generate_quads(self, buffer):
+        """
+        generate quads using CPU ALU
+        use intel MKL with numpy to speed this up
+
+        TODO: consider to move this to be populated from compute shader
+        """
+
+        def gen_quad(rad, pos, color):
+            quad = self.vbo_data.copy()
+            quad[:, [0, 1]] *= rad
+            quad[:, [0, 1, 4, 5, 6]] += pos + color
+            return quad
+
+        self.vaos = []
+        data = np.frombuffer(buffer.read(), dtype='f4')
         data = data.reshape((Renderer.COUNT, Renderer.STRUCT_SIZE))
-
-        # generate quads using CPU ALU
-        # use intel MKL with numpy to speed this up
         for item in data:
-            # popout 1x1 quad
-            item_vertex = self.vbo_data.copy()
-
-            # apply rad
-            item_vertex[:, [0, 1]] *= item[3]
-
-            # xy
-            item_vertex[:, 0] += item[0]
-            item_vertex[:, 1] += item[1]
-
-            # rgb
-            item_vertex[:, 4] = item[8]
-            item_vertex[:, 5] = item[9]
-            item_vertex[:, 6] = item[10]
+            quad = gen_quad(item[3], (item[0], item[1]), (item[8], item[9], item[10]))
 
             # generate vertex buffer object to render
-            item_vertex_buffer = self.context.buffer(item_vertex.tobytes())
+            item_vertex_buffer = self.context.buffer(quad.tobytes())
             bo = [(
                 item_vertex_buffer,
                 '2f 2f 3f',
                 'in_vert', 'in_uv', 'in_col'
             )]
 
-            # generate vertex array object and render
-            self.context.vertex_array(
-                self.program, bo, self.index_buffer
-            ).render()
+            # generate vertex array object
+            yield self.context.vertex_array(
+                self.program, bo, self.index_buffer)
+
+    def paintGL(self):
+        self.context.viewport = self.viewport
+        self.background_quad.render()
+        for quad in self.generate_quads(self.target_buffer):
+            quad.render()
         self.update()
+
+        if self.idx > 50:
+            if self.recording:
+                import imageio
+                imageio.mimwrite("compute_shader_demo.gif", self.recording)
+                self.recording = []
+                print("recording finished")
+            return
+        print(f"capturing frame: {self.idx} / 50..")
+        self.idx += 1
+
+        self.framebuffer.use()
+        self.background_quad.render()
+        for quad in self.generate_quads(self.target_buffer):
+            quad.render()
+
+        debug_data = np.frombuffer(
+            self.debug_texture.read(), dtype=np.float32)
+        debug_data = debug_data.reshape((512, 512, 3))
+        debug_data = debug_data[::-1,]
+        debug_data = debug_data * 255.0
+        debug_data = debug_data.astype(np.uint8)
+        self.recording.append(debug_data)
 
 
 def main():
