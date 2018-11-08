@@ -1,7 +1,7 @@
 
+import time
 import math
 import random
-import asyncio
 
 import numpy as np
 import moderngl as mg
@@ -46,19 +46,21 @@ void main()
     }
 
     vec3 c = v_col;
-    c.xy += v_uv.xy * 0.05;
-    c.xy += v_pos.xy * 0.75;
+    c.xy += v_uv.xy * 0.00001;
+    c.xy += v_pos.xy * 0.00001;
     out_color = vec4(c, 1.0);
 }
 """
 
 # calc position with compute shader
-compute_worker_shader_code = """
+compute_advance_worker_shader_code = """
 #version 430
 #define GROUP_SIZE %COMPUTE_SIZE%
-#define ADVANT_SIZE %ADVANT_SIZE%;
+#define ADVANT_SIZE %ADVANT_SIZE%
 
-uniform int advant_toggle;
+#define WALL_ELASTICITY 0.3
+#define GRAVITY 0.02
+#define AIR_FRICTION 0.88
 
 layout(local_size_x=GROUP_SIZE) in;
 
@@ -87,44 +89,53 @@ void main()
     vec4 v = in_ball.vel.xyzw;
     vec4 c = in_ball.col.xyzw;
 
-    int advant = x % ADVANT_SIZE;
-    if (advant != advant_toggle)
+    v.y += -GRAVITY;
+
+    float rad = p.w * 0.5;
+    float scale_v = length(v);
+
+    if (p.x + v.x - rad <= -1.0)
     {
-        Ball out_ball_skip;
-        out_ball_skip.pos.xyzw = p.xyzw;
-        out_ball_skip.vel.xyzw = v.xyzw;
+        p.x = -1.0 + rad;
+        v.x *= -WALL_ELASTICITY;
+    }
+    else if (p.x + v.x + rad >= 1.0)
+    {
+        p.x = 1.0 - rad;
+        v.x *= -WALL_ELASTICITY;
+    }
 
-        out_ball_skip.col.xyzw = c.xyzw;
-        Out.balls[x] = out_ball_skip;
-
-        return;
+    if (p.y + v.y - rad <= -1.0)
+    {
+        p.y = -1.0 + rad;
+        v.y *= -WALL_ELASTICITY;
+    }
+    else if (p.y + v.y + rad >= 1.0)
+    {
+        p.y = 1.0 - rad;
+        v.y *= -WALL_ELASTICITY;
     }
 
     p.xy += v.xy;
+    v *= AIR_FRICTION;
 
-    float rad = p.w * 0.5;
-    if (p.x - rad <= -1.0)
+    for (int y = x; y < GROUP_SIZE; y++)
     {
-        p.x = -1.0 + rad;
-        v.x *= -0.98;
-    }
-    else if (p.x + rad >= 1.0)
-    {
-        p.x = 1.0 - rad;
-        v.x *= -0.98;
-    }
+        if (x == y) { continue; }
 
-    if (p.y - rad <= -1.0)
-    {
-        p.y = -1.0 + rad;
-        v.y *= -0.98;
+        Ball ob = In.balls[y];
+        vec4 op = ob.pos.xyzw;
+
+        vec2 d = op.xy - p.xy;
+        float sr = op.w * 0.5 + rad;
+        if (d.x * d.x + d.y * d.y < sr * sr)
+        {
+            float a = d.x != 0.0 ? atan(d.y, d.x) : 3.1415;
+            vec2 unit_revert = vec2(cos(a), sin(a));
+            p.xy = op.xy - unit_revert * sr;
+            v.xy = unit_revert * scale_v * -0.5;
+        }
     }
-    else if (p.y + rad >= 1.0)
-    {
-        p.y = 1.0 - rad;
-        v.y *= -0.98;
-    }
-    v.y += -0.001;
 
     Ball out_ball;
     out_ball.pos = p;
@@ -137,72 +148,64 @@ void main()
 
 
 class ComputeToggleTimer(QtCore.QThread):
-    compute_update_signal = QtCore.pyqtSignal(bool, int)
+    compute_update_signal = QtCore.pyqtSignal(float)
 
-    def __init__(self, renderer, advant_size):
+    def __init__(self, compute_complete_signal):
         super(ComputeToggleTimer, self).__init__()
-        self.advant_size = advant_size
-        self.advant = 0
-        self.toggle_buffer = False
+        self.compute_complete_flag = False
+        compute_complete_signal.connect(self.compute_complete)
 
-        renderer.compute_request_next_signal.connect(self.awaiter)
-
-    def awaiter(self):
-        self.awaits = True
+    def compute_complete(self):
+        self.compute_complete_flag = False
 
     def run(self):
         while True:
-            self.awaits = False
-            self.compute_update_signal.emit(self.toggle_buffer, self.advant)
-
-            while not self.awaits:
-                self.msleep(0)
-
-            self.toggle_buffer = not self.toggle_buffer
-            self.advant += 1
-            self.advant %= self.advant_size
-
-            self.msleep(0)
+            previous_frame = time.time()
+            while self.compute_complete_flag:
+                self.msleep(1)
+            delta_time = time.time() - previous_frame
+            self.compute_update_signal.emit(delta_time)
+            self.compute_complete_flag = True
 
 
 class Renderer(QtWidgets.QOpenGLWidget):
-    compute_request_next_signal = QtCore.pyqtSignal()
-
-    COUNT = 1000
+    COUNT = 500
     STRUCT_SIZE = 12
     ADVANT_SIZE = 1
 
     worker_thread = None
     advant_toggle_uniform = None
 
-    def __init__(self):
+    compute_complete_signal = QtCore.pyqtSignal()
+
+    def __init__(self, framerate_label):
         super(Renderer, self).__init__()
-        W, H = 600, 600
+        W, H = 300, 300
         self.setMinimumSize(W, H)
         self.setMaximumSize(W, H)
         self.viewport = (0, 0, W, H)
+        self.toggle = False
+        self.framerate_label = framerate_label
 
-    def update_computeworker(self, toggle, advant):
-        if toggle:
-            a, b = 0, 1
-            self.target_buffer = self.compute_buffer_b
+    def update_computeworker(self, delta_time):
+        if self.toggle:
+            self.compute_buffer_a.bind_to_storage_buffer(0)
+            self.compute_buffer_b.bind_to_storage_buffer(1)
         else:
-            a, b = 1, 0
-            self.target_buffer = self.compute_buffer_a
+            self.compute_buffer_a.bind_to_storage_buffer(1)
+            self.compute_buffer_b.bind_to_storage_buffer(0)
+        self.toggle = not self.toggle
+        self.compute_shader_advance.run(group_x=Renderer.STRUCT_SIZE)
+        self.compute_complete_signal.emit()
 
-        self.advant_toggle_uniform.value = advant
-        self.compute_buffer_a.bind_to_storage_buffer(a)
-        self.compute_buffer_b.bind_to_storage_buffer(b)
-        self.compute_shader.run(group_x=Renderer.STRUCT_SIZE)
-
-        self.compute_request_next_signal.emit()
+        if delta_time:
+            self.framerate_label.setText(f"Framerate: {1.0 / delta_time}")
 
     def initializeGL(self):
         self.context = mg.create_context()
         self.program = self.context.program(
             vertex_shader=simple_vertex_shader_code,
-            fragment_shader=simple_fragment_shader_code
-        )
+            fragment_shader=simple_fragment_shader_code)
 
         index_data = np.array([
             0, 1, 2,
@@ -218,22 +221,21 @@ class Renderer(QtWidgets.QOpenGLWidget):
             [+1.0, +1.0,  1.0, 1.0,  0.0, 0.0, 0.0],
         ]).astype('f4')
 
-        compute_shader_code_parsed = compute_worker_shader_code \
+        compute_shader_advance_code_parsed = compute_advance_worker_shader_code \
             .replace("%COMPUTE_SIZE%", str(Renderer.COUNT)) \
             .replace("%ADVANT_SIZE%", str(Renderer.ADVANT_SIZE))
-        self.compute_shader = self.context.compute_shader(compute_shader_code_parsed)
-        self.advant_toggle_uniform = self.compute_shader.get('advant_toggle', 0)
+        self.compute_shader_advance = self.context.compute_shader(compute_shader_advance_code_parsed)
 
         compute_data = []
         for i in range(Renderer.COUNT):
             _angle = (i / Renderer.COUNT) * math.pi * 2.0
             _dist = 0.125
-            radius = random.random() * 0.01 + 0.01
+            radius = random.random() * 0.04 + 0.02
             x = math.cos(_angle) * _dist
             y = math.sin(_angle) * _dist
             z = 0.0
             w = radius
-            _v = random.random() * 0.01 + 0.01
+            _v = random.random() * 0.05 + 0.05
             vx = math.cos(_angle) * _v
             vy = math.sin(_angle) * _v
             vz = 0.0
@@ -252,9 +254,9 @@ class Renderer(QtWidgets.QOpenGLWidget):
 
         self.compute_buffer_a = self.context.buffer(compute_data_bytes)
         self.compute_buffer_b = self.context.buffer(compute_data_bytes)
-        self.target_buffer = self.compute_buffer_b
+        self.target_buffer = self.compute_buffer_a
 
-        self.timer_thread = ComputeToggleTimer(self, Renderer.ADVANT_SIZE)
+        self.timer_thread = ComputeToggleTimer(self.compute_complete_signal)
         self.timer_thread.compute_update_signal.connect(self.update_computeworker)
         self.timer_thread.start()
 
@@ -263,7 +265,8 @@ class Renderer(QtWidgets.QOpenGLWidget):
         data = np.frombuffer(self.target_buffer.read(), dtype='f4')
         data = data.reshape((Renderer.COUNT, Renderer.STRUCT_SIZE))
 
-        self.vaos = []
+        # generate quads using CPU ALU
+        # use intel MKL with numpy to speed this up
         for item in data:
             # popout 1x1 quad
             item_vertex = self.vbo_data.copy()
@@ -297,10 +300,12 @@ class Renderer(QtWidgets.QOpenGLWidget):
 
 def main():
     app = QtWidgets.QApplication([])
-    mainwin = QtWidgets.QMainWindow()
+    mainwin = QtWidgets.QMainWindow(None, QtCore.Qt.WindowStaysOnTopHint)
     root = QtWidgets.QFrame()
     root_ly = QtWidgets.QVBoxLayout()
-    renderer = Renderer()
+    framerate_label = QtWidgets.QLabel()
+    root_ly.addWidget(framerate_label)
+    renderer = Renderer(framerate_label)
     root_ly.addWidget(renderer)
     root.setLayout(root_ly)
     mainwin.setCentralWidget(root)
