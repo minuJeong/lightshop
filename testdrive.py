@@ -1,4 +1,10 @@
 
+'''
+calculate ball bouncing with compute shader
+
+author: minu jeong
+'''
+
 import time
 import math
 import random
