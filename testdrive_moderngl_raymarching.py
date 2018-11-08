@@ -1,4 +1,8 @@
 
+'''
+author: minu jeong
+'''
+
 import struct
 import time
 
