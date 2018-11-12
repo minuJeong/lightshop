@@ -101,13 +101,7 @@ class NormalmapNode(NodeWidget):
         add_img = Image.fromarray(array)
 
         img = Image.blend(img, add_img, 0.2)
-
         self.device.rebuild_texture(img)
-
-        img = None
-        add_img = None
-        del img
-        del add_img
 
     # called by qt framework
     def mousePressEvent(self, e):
