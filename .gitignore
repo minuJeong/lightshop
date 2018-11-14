@@ -4,6 +4,7 @@ qtcreate/
 *.tiff
 *.png
 *.gif
+*.mp4
 
 debug.*
 *.log
