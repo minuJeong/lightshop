@@ -117,13 +117,16 @@ class Renderer(object):
                 "in_verts", "in_uvs"
             )],
             self.context.buffer(indices.astype('i4').tobytes()))
-        program["u_projection"].value = \
-            (1, 0, 0, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1)
-        program["u_view"].value = \
-            (1, 0, 0, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1)
+
+        program["u_projection"].value, \
+        program["u_view"].value, \
         program["u_model"].value = \
+            (1, 0, 0, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1), \
+            (1, 0, 0, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1), \
             (1, 0, 0, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1)
+
         program['u_resolution'].value = (self.W, self.H, 0, 0)
+
         self.scene_nodes.append(vao)
         return vao
 

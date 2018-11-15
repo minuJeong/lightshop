@@ -14,10 +14,10 @@ void main()
     float sr = sin(r);
     float cr = cos(r);
     glfcxy = mat4(
-        cr, -sr, 0, 0,
-        sr, cr, 0, 0,
-        0, 0, 1, 0,
-        0, 0, 0, 1
+        +cr,    -sr,    +0.0,   +0.0,
+        +sr,    +cr,    +0.0,   +0.0,
+        +0.0,   +0.0,   +1.0,   +0.0,
+        -0.5,   -0.5,   +0.0,   +1.0
     ) * glfcxy;
 
     out_color = vec4(0, 0, v_uvs.x, 1.0) * 0.000001;
