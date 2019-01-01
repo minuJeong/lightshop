@@ -1,4 +1,4 @@
-    
+
 import numpy as np
 import moderngl as mg
 
@@ -15,35 +15,11 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
 from _common import _read
-from _common import _screen_quad
 from _common import _flatten_array
 
 
-def _screenspace_generation(width, height):
-    vs = _read("./gl/gradient_fresnel_tex.vs")
-    fs = _read("./gl/_debug.fs")
-
-    context = mg.create_standalone_context()
-    program = context.program(vertex_shader=vs, fragment_shader=fs)
-    vao = _screen_quad(program, context)
-
-    test_texture = context.texture((width, height), 4)
-    test_texture.use(0)
-
-    frame_tex = context.texture((width, height), 4, dtype='f4')
-    frame = context.framebuffer([frame_tex])
-    frame.use()
-
-    vao.render()
-    result_bytes = frame_tex.read()
-
-    data = np.frombuffer(result_bytes, dtype='f4')
-    data = data.reshape((height, width, 4))
-    return _flatten_array(data)
-
-
 def _compute_driven_generation(width, height, cs_path):
-    x, y, z = 1024, 1, 1
+    x, y, z = width, 1, 1
     args = {
         'X': x,
         'Y': y,
@@ -118,21 +94,27 @@ class ComputeShaderViewer(QtWidgets.QLabel):
 
     def recompile_compute_shader(self):
         try:
-            data = _compute_driven_generation(width, height, self.shader_path)
+            data = _compute_driven_generation(*self.size, self.shader_path)
             img = Image.fromarray(data)
             pixmap = QPixmap.fromImage(ImageQt(img))
             self.setPixmap(pixmap)
             self.setAlignment(Qt.AlignCenter)
+
+            print("recompiled shader")
         except Exception as e:
             print(e)
 
+    def resizeEvent(self, e):
+        self.size = e.size().width(), e.size().height()
+        self.recompile_compute_shader()
+
 if __name__ == "__main__":
-    width, height = 1024, 1024
+    width, height = 256, 256
 
     app = QtWidgets.QApplication([])
     win = ComputeShaderViewer((width, height))
     win.setWindowFlags(Qt.WindowStaysOnTopHint)
-    win.setMinimumSize(256, 256)
+    win.setMinimumSize(width, height)
     win.show()
 
     app.exec()

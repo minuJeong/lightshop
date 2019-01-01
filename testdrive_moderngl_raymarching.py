@@ -8,6 +8,7 @@ import time
 
 import numpy as np
 import moderngl as mg
+import imageio as ii
 from PyQt5 import QtWidgets
 from PyQt5 import QtCore
 
@@ -133,6 +134,8 @@ float displace(vec3 p, float m, float s)
 // world
 float sample_world(vec3 p, inout vec3 c)
 {
+    return sphere(p, 0.5);
+
     vec3 b_left_pos = p - vec3(-0.8, -0.25, 0.0);
     b_left_pos = rotate(b_left_pos, vec3(T, 0.0, 0.0));
     float d_box_left = box(b_left_pos, vec3(0.4));
@@ -207,14 +210,14 @@ void main()
     vec3 r = normalize(vec3(v_uv - vec2(0.5, 0.5), 1.001));
 
     // l: light
-    vec3 l = normalize(vec3(-0.5, -0.2, 0.1));
+    vec3 l = normalize(vec3(-0.5, -0.2, -10.0));
 
     // c: albedo
     vec3 c = vec3(0.125);
     float d = raymarch(o, r, c);
 
     // pixel color
-    vec3 color = vec3(0);
+    vec3 color = vec3(0.001 * sin(T) + 0.0005);
     if (d < FAR)
     {
         vec3 p = o + r * d;
@@ -245,13 +248,14 @@ class Renderer(QtWidgets.QOpenGLWidget):
 
     def __init__(self):
         super(Renderer, self).__init__()
-        W, H = 500, 500
-        self.setMinimumSize(W, H)
-        self.setMaximumSize(W, H)
-        self.viewport = (0, 0, W, H)
+        self.W, self.H = 500, 500
+        self.setMinimumSize(self.W, self.H)
+        self.setMaximumSize(self.W, self.H)
+        self.viewport = (0, 0, self.W, self.H)
 
     def initializeGL(self):
         self.context = mg.create_context()
+        self.context.viewport = self.viewport
         program = self.context.program(vertex_shader=vertex_shader, fragment_shader=fragment_shader)
 
         vertex_data = np.array([
@@ -274,18 +278,60 @@ class Renderer(QtWidgets.QOpenGLWidget):
         self.vao = self.context.vertex_array(program, content, idx_buffer)
         self.u_time = program.get("T", 0.0)
 
+        self.capture_requested = False
+
+    def render(self):
+        self.vao.render()
+
+        if self.capture_requested:
+            self.capture_requested = False
+            render_texture = self.context.texture((self.W, self.H), 4, dtype='f4')
+            framebuffer = self.context.framebuffer([render_texture])
+            framebuffer.use()
+            self.vao.render()
+
+            render_data = render_texture.read()
+            render_array = np.frombuffer(render_data, dtype='f4')
+            render_array = render_array.reshape((self.W, self.H, 4))
+            render_array = render_array * 255.0
+            render_array = render_array[::-1]
+            render_array = render_array.astype(np.uint8)
+            ii.imwrite("capture.png", render_array)
+
     def paintGL(self):
         time_value = struct.pack('f', time.clock() * 2.0)
         self.u_time.write(time_value)
-
-        self.context.viewport = self.viewport
-        self.vao.render()
+        self.render()
         self.update()
 
+    def capture(self):
+        self.capture_requested = True
 
-app = QtWidgets.QApplication([])
-mainwin = QtWidgets.QMainWindow(None, QtCore.Qt.WindowStaysOnTopHint)
-renderer = Renderer()
-mainwin.setCentralWidget(renderer)
-mainwin.show()
-app.exec()
+
+class CaptureBtn(QtWidgets.QPushButton):
+    def __init__(self, renderer):
+        super(CaptureBtn, self).__init__()
+        self.renderer = renderer
+        self.setText("Capture")
+        self.clicked.connect(self.on_click)
+
+    def on_click(self, e=False):
+        self.renderer.capture()
+
+
+def main():
+    app = QtWidgets.QApplication([])
+    mainwin = QtWidgets.QMainWindow(None, QtCore.Qt.WindowStaysOnTopHint)
+    root = QtWidgets.QFrame()
+    root_layout = QtWidgets.QVBoxLayout()
+    root.setLayout(root_layout)
+    renderer = Renderer()
+    root_layout.addWidget(renderer)
+    capture_btn = CaptureBtn(renderer)
+    root_layout.addWidget(capture_btn)
+    mainwin.setCentralWidget(root)
+    mainwin.show()
+    app.exec()
+
+if __name__ == "__main__":
+    main()

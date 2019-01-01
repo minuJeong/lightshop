@@ -147,12 +147,12 @@ class FragmentWatcher(QtWidgets.QOpenGLWidget):
 
         self.vao = None
 
-    def recompile_shaders(self):
+    def recompile_shaders(self, path="./_gl/pikachu"):
         print("recompiling shaders..")
 
         try:
-            vs = _read("./_gl/verts.glsl")
-            fs = _read("./_gl/frags.glsl")
+            vs = _read("{}/verts.glsl".format(path))
+            fs = _read("{}/frags.glsl".format(path))
 
             program = self.context.program(vertex_shader=vs, fragment_shader=fs)
             self.u_time = program["u_time"]
@@ -180,13 +180,44 @@ class FragmentWatcher(QtWidgets.QOpenGLWidget):
             self.vao.render()
             self.update()
 
+
+class Tool(QtWidgets.QWidget):
+
+    def __init__(self, width, height):
+        super(Tool, self).__init__()
+
+        root_layout = QtWidgets.QVBoxLayout()
+        self.setLayout(root_layout)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+
+        shaders_layout = QtWidgets.QVBoxLayout()
+        root_layout.addLayout(shaders_layout)
+        shaders_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.path_le = QtWidgets.QLineEdit()
+        shaders_layout.addWidget(self.path_le)
+        self.path_le.setText("./_gl/pikachu")
+
+        self.renderer = FragmentWatcher((width, height))
+        root_layout.addWidget(self.renderer)
+
+        self.path_le.returnPressed.connect(self.recompile)
+
+    def recompile(self):
+        path = self.path_le.text()
+        self.renderer.recompile_shaders(path)
+
 if __name__ == "__main__":
-    width, height = 512, 512
+    width, height = 400, 400
 
     app = QtWidgets.QApplication([])
-    win = FragmentWatcher((width, height))
-    win.setWindowFlags(Qt.WindowStaysOnTopHint)
-    win.setMinimumSize(256, 256)
-    win.show()
+    mainwin = QtWidgets.QMainWindow()
+    mainwin.setWindowTitle("Pikachu Renderer")
+
+    tool = Tool(width, height)
+    mainwin.setCentralWidget(tool)
+    mainwin.setWindowFlags(Qt.WindowStaysOnTopHint)
+    mainwin.setMinimumSize(width, height)
+    mainwin.show()
 
     app.exec()

@@ -59,7 +59,8 @@ vec4 func_length_flat()
 
 vec4 func_coslength(float length_intensity, float time_intensity)
 {
-    float ll = dot(uv, uv) * length_intensity;
+    float ll = dot(uv, uv);
+    ll = sqrt(ll) * length_intensity;
     float tt = t * time_intensity;
     float cl = cos(ll + tt) * 0.5 + 0.5;
     cl = pow(cl, 4.0);
@@ -78,13 +79,12 @@ vec4 func_rotator(float time_intensity, float intensity=1.0, float power=1.0)
         +sin(angle), +cos(angle)
     );
     vec2 ruv = rm * uv;
-    return vec4(ruv, ruv.x, 1.0);
+    return vec4(ruv.x, ruv.x, ruv.x, 1.0);
 }
 
 vec4 timeline()
 {
-    // #define STEP (1.0 / 7.0)
-    #define STEP (1.0 / 4.0)
+    #define STEP (1.0 / 7.0)
 
     float kf_1 = MAX_TIME * (STEP * 1.0);
     float kf_2 = MAX_TIME * (STEP * 2.0);
@@ -96,18 +96,13 @@ vec4 timeline()
     float frame_span = MAX_TIME * STEP;
 
     // sacrifice performance for convenient editing
-    vec4 a = func_rotator(-24.5, +1.5, 2.5);
-    vec4 b = func_length_flat();
-    vec4 c = func_rotator(-24.5, -1.5, 2.5);
-    vec4 d = func_length_flat();
-
-    // vec4 a = func_length_flat();
-    // vec4 b = func_rotator(10.15, 2.2, 2.2);
-    // vec4 c = func_coslength(22.0, 42.5);
-    // vec4 d = func_rotator(-15.75, 1.85, 1.75);
+    vec4 a = func_length_flat();
+    vec4 b = func_rotator(10.15, 2.2, 2.2);
+    vec4 c = func_coslength(40.0, 12.0);
+    vec4 d = func_rotator(-15.75, 1.85, 1.75);
     vec4 e = func_grid();
-    vec4 f = func_coslength(8.0, +12.5);
-    vec4 g = func_coslength(8.0, -12.5);
+    vec4 f = func_coslength(8.0, +7.5);
+    vec4 g = func_coslength(8.0, -7.5);
 
     float r;
     vec4 x;
@@ -134,8 +129,7 @@ vec4 timeline()
     else if (t < kf_4)
     {
         x = d;
-        // y = e;
-        y = a;
+        y = e;
         r = (t - kf_3) / frame_span;
     }
     else if (t < kf_5)
@@ -175,13 +169,14 @@ void main()
 }
 """
 
+
 class Renderer(QtWidgets.QOpenGLWidget):
     RECORDING = True
 
     def __init__(self):
         super(Renderer, self).__init__()
 
-        self.W, self.H = 128, 128
+        self.W, self.H = 256, 256
         self.viewport = (0, 0, self.W, self.H)
         self.setMinimumSize(self.W, self.H)
         self.setMaximumSize(self.W, self.H)
@@ -245,6 +240,7 @@ class Renderer(QtWidgets.QOpenGLWidget):
 
         if self.RECORDING:
             self.writer.close()
+
 
 def main():
     app = QtWidgets.QApplication([])

@@ -45,6 +45,22 @@ vec3 phase_2()
     return vec3(cuv, 0.5);
 }
 
+vec3 phase_3()
+{
+    return vec3(cuv, 0.75);
+}
+
+vec3 phase_4()
+{
+    return vec3(cuv, 0.15);
+}
+
+vec3 mix_phases(vec3 a, vec3 b, float next_time, float time)
+{
+    float r = t - time / (next_time - time);
+    return mix(a, b, r);
+}
+
 vec3 timeline()
 {
     float key_0 = 0.0;
@@ -56,19 +72,36 @@ vec3 timeline()
     float r;
     if (t < key_1)
     {
-        vec3 a = phase_1();
-        vec3 b = phase_2();
-
-        float frame_lapse = key_1 - key_0;
-        r = t - (key_0) / frame_lapse;
-        return mix(a, b, r);
+        return mix_phases(
+            phase_1(),
+            phase_2(),
+            key_1, key_0
+        );
     }
     else if (t < key_2)
-    {}
+    {
+        return mix_phases(
+            phase_2(),
+            phase_3(),
+            key_2, key_1
+        );
+    }
     else if (t < key_3)
-    {}
+    {
+        return mix_phases(
+            phase_3(),
+            phase_4(),
+            key_3, key_2
+        );
+    }
     else if (t < key_4)
-    {}
+    {
+        return mix_phases(
+            phase_4(),
+            phase_1(),
+            key_4, key_3
+        );
+    }
     else
     {
         return vec3(0, 0, 0);

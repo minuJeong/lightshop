@@ -32,16 +32,18 @@ layout (std430, binding=2) buffer uv_0
     vec2 uvs[1];
 };
 
-#define win_width 5
-#define win_height 5
-#define win_wh 25
+#define win_width 7
+#define win_height 7
+#define win_wh 49
 vec4 window[win_wh] = {
     // should manually initialize this
-    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
-    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
-    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
-    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
-    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0)
+    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
+    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
+    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
+    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
+    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
+    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0),
+    vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0), vec4(0)
 };
 
 void main()

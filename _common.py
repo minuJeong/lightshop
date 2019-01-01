@@ -14,4 +14,5 @@ def _read(path, args):
 def _flatten_array(data):
     data = np.multiply(data, 255.0)
     data = data.astype(np.uint8)
+    data = data[:, ::-1]
     return data
