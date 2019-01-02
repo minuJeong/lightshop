@@ -262,7 +262,7 @@ def main():
 
         if True:
             atlas_resolution = 2048
-            n_row = 7
+            n_row = 5
             w = atlas_resolution // n_row
             atlas = Image.new("RGBA", (2048, 2048))
 
@@ -284,6 +284,7 @@ def main():
                 y = yr * distance
                 z = math.sin(ra) * distance * xzr
 
+                # todo: campos inplace to pipeline
                 u_campos = (x, y, z)
                 for data in _screenspace_generation(
                         w, w,
