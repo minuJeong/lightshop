@@ -1,6 +1,7 @@
 
 import os
 import time
+import math
 
 import numpy as np
 import moderngl as mg
@@ -178,6 +179,11 @@ class FragmentWatcher(QtWidgets.QOpenGLWidget):
 
             program = self.context.program(vertex_shader=vs, fragment_shader=fs)
             self.u_time = program["u_time"]
+            self.u_campos = program["u_campos"]
+            self.u_campos.value = (0.0, 0.0, -10.0)
+
+            self.u_focus = program["u_focus"]
+            self.u_focus.value = (0.0, 2.0, 0.0)
 
             self.vao = _screen_quad(program, self.context)
 
@@ -198,7 +204,11 @@ class FragmentWatcher(QtWidgets.QOpenGLWidget):
 
     def paintGL(self):
         if self.vao:
-            self.u_time.value = time.time() - self.start_time
+            t = time.time() - self.start_time
+            self.u_time.value = t
+            x = math.cos(t) * +10.0
+            z = math.sin(t) * -10.0
+            self.u_campos.value = (x, 0.0, z)
             self.vao.render()
             self.update()
 
@@ -231,18 +241,76 @@ class Tool(QtWidgets.QWidget):
 
 
 def main():
-    if not os.path.isdir("pika"):
-        os.makedirs("pika")
+    if True:
+        if not os.path.isdir("pika"):
+            os.makedirs("pika")
 
-    gif_writer = ii.get_writer("./pika/pikachu.gif", fps=24)
-    for data in _screenspace_generation(
-            128, 128,
-            "./_gl/pikachu/verts.glsl",
-            "./_gl/pikachu/frags.glsl",
-            start_time=2.2, end_time=8.44316, frames=64):
-        gif_writer.append_data(data)
+        u_campos = (0.0, 0.0, -10.0)
+        u_focus = (0.0, 2.0, 0.0)
 
-    return
+        if False:
+            gif_writer = ii.get_writer("./pika/pikachu.gif", fps=24)
+            mp4_writer = ii.get_writer("./pika/pikachu.mp4", fps=24)
+            for data in _screenspace_generation(
+                    304, 304,
+                    "./_gl/pikachu/verts.glsl",
+                    "./_gl/pikachu/frags.glsl",
+                    start_time=2.4, end_time=8.64316, frames=64,
+                    u_campos=u_campos, u_focus=u_focus):
+                gif_writer.append_data(data)
+                mp4_writer.append_data(data)
+
+        if True:
+            atlas_resolution = 2048
+            n_row = 7
+            w = atlas_resolution // n_row
+            atlas = Image.new("RGBA", (2048, 2048))
+
+            half = 0.5 / n_row
+            distance = 10.0
+            pi = math.pi
+            for i in range(n_row * n_row):
+                u = i % n_row
+                v = i // n_row
+
+                ur = u / n_row + half
+                vr = v / n_row + half
+
+                yr = abs(0.5 - vr) * 2.0
+                xzr = math.cos(math.atan2(yr, 1.0))
+                ra = 2.0 * -pi * ur
+
+                x = math.cos(ra) * distance * xzr
+                y = yr * distance
+                z = math.sin(ra) * distance * xzr
+
+                u_campos = (x, y, z)
+                for data in _screenspace_generation(
+                        w, w,
+                        "./_gl/pikachu/verts.glsl",
+                        "./_gl/pikachu/frags.glsl",
+                        u_campos=u_campos, u_focus=u_focus):
+
+                    x = i % n_row
+                    y = i // n_row
+                    img = Image.fromarray(data)
+                    paste_at = (u * w, v * w)
+                    atlas.paste(img, paste_at)
+            atlas.save("./pika/T_PikachuAtlas.png")
+
+        if False:
+            i = 0
+            for data in _screenspace_generation(
+                    300, 300,
+                    "./_gl/pikachu/verts.glsl",
+                    "./_gl/pikachu/frags.glsl",
+                    start_time=2.4, end_time=2.2,
+                    u_campos=u_campos, u_focus=u_focus):
+                ii.imwrite("./pika/pikachu_{}.png".format(i), data)
+                i += 1
+
+        return
+
     width, height = 200, 200
 
     app = QtWidgets.QApplication([])

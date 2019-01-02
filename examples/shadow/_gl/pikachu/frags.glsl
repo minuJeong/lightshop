@@ -15,7 +15,8 @@ author: minu jeong
 #define STEP 128.0
 
 uniform float u_time;
-
+uniform vec3 u_focus;
+uniform vec3 u_campos;
 
 in vec2 v_uvs;
 
@@ -349,16 +350,16 @@ float world(vec3 p, inout vec3 base_color)
 {
     float _rad = 1.5;
 
-    float floor = abs(-0.0 - p.y);
-    if (floor < SURFACE)
-    {
-        base_color = vec3(0.25);
-        return floor;
-    }
+    // float floor = abs(-0.0 - p.y);
+    // if (floor < SURFACE)
+    // {
+    //     base_color = vec3(0.25);
+    //     return floor;
+    // }
 
     float _pikachu = pikachu(p, base_color);
-    float d = min(floor, _pikachu);
-    return d;
+    // float d = min(floor, _pikachu);
+    return _pikachu;
 }
 
 float raymarch(vec3 o, vec3 r, inout vec3 base_color)
@@ -452,34 +453,40 @@ vec3 aces_film_tonemap(vec3 hdr)
     return clamp(x / y, 0.0, 1.0);
 }
 
+mat3 lookat(vec3 o, vec3 t, float roll)
+{
+    vec3 row_0 = vec3(sin(0.0), cos(0.0), 0.0);
+    vec3 row_1 = normalize(t - o);
+    vec3 row_2 = normalize(cross(row_1, row_0));
+    vec3 row_3 = normalize(cross(row_2, row_1));
+    return mat3(row_2, row_3, row_1);
+}
+
 void main()
 {
-    vec3 light = vec3(15.0, 32.0, 15.0);
+    vec3 light = vec3(15.0, 45.0, 15.0);
 
     vec3 L = normalize(light);
 
-    vec3 o = vec3(0.0, 1.05, -9.0);
     vec2 uv = v_uvs - 0.5;
     vec3 r = vec3(uv, 1.0);
-    r.y -= 0.1;
     r = normalize(r);
 
-    o = rotate_x(o, -0.45);
-    r = rotate_x(r, -0.25);
+    mat3 _look = lookat(u_campos, u_focus, 0.0);
+    r = _look * r;
 
-    // rotate around
-    o = rotate_y(o, u_time);
-    r = rotate_y(r, u_time);
-
-    vec3 base_color = vec3(0.2, 0.3, 0.6);
-    float d = raymarch(o, r, base_color);
+    vec3 base_color = vec3(0.0, 0.0, 0.0);
+    float d = raymarch(u_campos, r, base_color);
 
     vec3 hdr = base_color;
+    float alpha = 0.0;
     if (d < FAR)
     {
-        vec3 P = o + r * d;
+        alpha = 1.0;
+
+        vec3 P = u_campos + r * d;
         vec3 N = normal(P);
-        vec3 V = normalize(-o);
+        vec3 V = normalize(-u_campos);
         vec3 H = normalize(L - V);
 
         float LdH = max(0.0, dot(L, H));
@@ -497,10 +504,16 @@ void main()
         hdr *= mix(1.0, d_shadow, shadow_intensity);
     }
 
+    // vinette
+    float l = length(uv);
+    l = 1.0 - pow(l * 1.25, 2.34);
+    l = clamp(l, 0.0, 1.0);
+    hdr *= l;
+
     vec3 ldr = aces_film_tonemap(hdr);
 
     out_color.xyz = ldr;
-    out_color.w = 1.0;
+    out_color.w = alpha;
 
     out_uv = v_uvs;
     out_time = u_time;
