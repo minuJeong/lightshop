@@ -119,7 +119,7 @@ vec3 rotate(vec3 p, vec3 r)
     return rz * ry * rx * p;
 }
 
-float picachu(vec3 p, inout vec3 base_color)
+float pikachu(vec3 p, inout vec3 base_color)
 {
     const vec3 deep_grey = vec3(0.05, 0.05, 0.05);
     const vec3 redish = vec3(1.0, 0.0, 0.0);
@@ -356,8 +356,8 @@ float world(vec3 p, inout vec3 base_color)
         return floor;
     }
 
-    float _picachu = picachu(p, base_color);
-    float d = min(floor, _picachu);
+    float _pikachu = pikachu(p, base_color);
+    float d = min(floor, _pikachu);
     return d;
 }
 
@@ -468,8 +468,8 @@ void main()
     r = rotate_x(r, -0.25);
 
     // rotate around
-    o = rotate_y(o, u_time * 2.0);
-    r = rotate_y(r, u_time * 2.0);
+    o = rotate_y(o, u_time);
+    r = rotate_y(r, u_time);
 
     vec3 base_color = vec3(0.2, 0.3, 0.6);
     float d = raymarch(o, r, base_color);

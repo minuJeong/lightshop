@@ -1,8 +1,10 @@
 
+import os
 import time
 
 import numpy as np
 import moderngl as mg
+import imageio as ii
 
 from PIL import Image
 from PIL.ImageQt import ImageQt
@@ -21,13 +23,24 @@ from _common import _screen_quad
 from _common import _flatten_array
 
 
-def _screenspace_generation(width, height):
-    vs = _read("./gl/gradient_fresnel_tex.vs")
-    fs = _read("./gl/_debug.fs")
+def _screenspace_generation(
+            width, height,
+            vspath, fspath,
+            start_time=0.0, end_time=1.0, frames=1,
+            **uniforms
+        ):
+    vs = _read(vspath)
+    fs = _read(fspath)
 
     context = mg.create_standalone_context()
     program = context.program(vertex_shader=vs, fragment_shader=fs)
     vao = _screen_quad(program, context)
+
+    for k, v in uniforms.items():
+        if k not in program:
+            continue
+
+        program[k].value = v
 
     test_texture = context.texture((width, height), 4)
     test_texture.use(0)
@@ -36,12 +49,21 @@ def _screenspace_generation(width, height):
     frame = context.framebuffer([frame_tex])
     frame.use()
 
-    vao.render()
-    result_bytes = frame_tex.read()
+    u_time = {"value": 0.0}
+    if "u_time" in program:
+        u_time = program["u_time"]
 
-    data = np.frombuffer(result_bytes, dtype='f4')
-    data = data.reshape((height, width, 4))
-    return _flatten_array(data)
+    span = end_time - start_time
+    step = span / max(float(frames), 0.0)
+    for t in range(int(frames)):
+        u_time.value = start_time + step * t
+
+        vao.render()
+        result_bytes = frame_tex.read()
+
+        data = np.frombuffer(result_bytes, dtype='f4')
+        data = data.reshape((height, width, 4))
+        yield _flatten_array(data)
 
 
 def _compute_driven_generation(width, height, cs_path):
@@ -121,7 +143,7 @@ class ComputeShaderViewer(QtWidgets.QLabel):
 
     def recompile_compute_shader(self):
         try:
-            data = _compute_driven_generation(width, height, self.shader_path)
+            data = _compute_driven_generation(self.size[0], self.size[1], self.shader_path)
             img = Image.fromarray(data)
             pixmap = QPixmap.fromImage(ImageQt(img))
             self.setPixmap(pixmap)
@@ -131,7 +153,7 @@ class ComputeShaderViewer(QtWidgets.QLabel):
 
     def keyPressEvent(self, e=None):
         if e.key() == Qt.Key_Space:
-            data = _compute_driven_generation(width, height, self.shader_path)
+            data = _compute_driven_generation(self.size[0], self.size[1], self.shader_path)
             img = Image.fromarray(data)
             img.save("GPU_Generated.png")
 
@@ -207,8 +229,21 @@ class Tool(QtWidgets.QWidget):
         path = self.path_le.text()
         self.renderer.recompile_shaders(path)
 
-if __name__ == "__main__":
-    width, height = 400, 400
+
+def main():
+    if not os.path.isdir("pika"):
+        os.makedirs("pika")
+
+    gif_writer = ii.get_writer("./pika/pikachu.gif", fps=24)
+    for data in _screenspace_generation(
+            128, 128,
+            "./_gl/pikachu/verts.glsl",
+            "./_gl/pikachu/frags.glsl",
+            start_time=2.2, end_time=8.44316, frames=64):
+        gif_writer.append_data(data)
+
+    return
+    width, height = 200, 200
 
     app = QtWidgets.QApplication([])
     mainwin = QtWidgets.QMainWindow()
@@ -217,7 +252,9 @@ if __name__ == "__main__":
     tool = Tool(width, height)
     mainwin.setCentralWidget(tool)
     mainwin.setWindowFlags(Qt.WindowStaysOnTopHint)
-    mainwin.setMinimumSize(width, height)
     mainwin.show()
 
     app.exec()
+
+if __name__ == "__main__":
+    main()
