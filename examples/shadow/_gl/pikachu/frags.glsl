@@ -135,7 +135,7 @@ float pikachu(vec3 p, inout vec3 base_color)
     // result
     float dist;
 
-    const vec3 pelvis_p = vec3(0.0, 0.62, 0.0);
+    const vec3 pelvis_p = vec3(0.0, 0.62, 0.25);
     const vec3 neck_p = pelvis_p + vec3(0.0, 1.75, 0.0);
     const vec3 shoulder_p = pelvis_p + vec3(0.0, 0.75, 0.0);
     const vec3 ear_p = neck_p + vec3(0.0, 0.5, 0.0);

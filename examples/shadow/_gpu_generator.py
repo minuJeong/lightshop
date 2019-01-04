@@ -2,6 +2,7 @@
 import os
 import time
 import math
+from itertools import cycle
 
 import numpy as np
 import moderngl as mg
@@ -24,12 +25,92 @@ from _common import _screen_quad
 from _common import _flatten_array
 
 
-def _screenspace_generation(
+def _rotate_around(n_row, distance):
+    half = 0.5 / n_row
+    pi = math.pi
+    cos = math.cos
+    sin = math.sin
+
+    for i in range(n_row * n_row):
+        u = i % n_row
+        v = i // n_row
+
+        ur = u / n_row + half
+        vr = v / n_row + half
+
+        yr = abs(0.5 - vr) * 2.0
+        xzr = math.cos(math.atan2(yr, 1.0)) * 0.5 + 0.5
+        ra = 2.0 * -pi * ur
+
+        x = cos(ra) * distance * xzr
+        y = yr * distance
+        z = sin(ra) * distance * xzr
+
+        yield (x, y, z), (u, v)
+
+
+def _screenspace_imposter_generation(
+            vspath, fspath,
+            distance=5.0,
+            n_row=15,
+            atlas_resolution=512,
+            **uniforms):
+
+    vs = _read(vspath)
+    fs = _read(fspath)
+
+    context = mg.create_standalone_context()
+    program = context.program(vertex_shader=vs, fragment_shader=fs)
+
+    if "u_campos" not in program or "u_focus" not in program:
+        print("program must defines [u_campos] and [u_focus] in uniforms")
+        return
+
+    vao = _screen_quad(program, context)
+
+    for k, v in uniforms.items():
+        if k not in program:
+            continue
+
+        program[k].value = v
+
+    u_campos = program["u_campos"]
+    u_focus = program["u_focus"]
+    u_campos.value = (0.0, 0.0, -distance)
+    u_focus.value = (0.0, distance * 0.33, 0.0)
+
+    w = atlas_resolution // n_row
+
+    atlas = Image.new("RGBA", (atlas_resolution, atlas_resolution))
+
+    frame_tex = context.texture((w, w), 4, dtype='f4')
+    frame = context.framebuffer([frame_tex])
+    frame.use()
+
+    for pos, uv in _rotate_around(n_row, distance):
+        u_campos.value = pos
+        vao.render()
+        result_bytes = frame_tex.read()
+        data = np.frombuffer(result_bytes, dtype='f4')
+        data = data.reshape((w, w, 4))
+        data = _flatten_array(data)
+
+        yield False, data
+
+        img = Image.fromarray(data)
+        paste_at = (uv[0] * w, uv[1] * w)
+        atlas.paste(img, paste_at)
+
+    yield True, np.array(atlas)
+
+
+def _screenspace_timespan_generation(
             width, height,
             vspath, fspath,
             start_time=0.0, end_time=1.0, frames=1,
-            **uniforms
-        ):
+            **uniforms):
+    """ Not used anymore """
+
     vs = _read(vspath)
     fs = _read(fspath)
 
@@ -68,6 +149,7 @@ def _screenspace_generation(
 
 
 def _compute_driven_generation(width, height, cs_path):
+    """ Not used anymore """
     x, y, z = 1024, 1, 1
     cs_args = {
         'X': x,
@@ -170,9 +252,10 @@ class FragmentWatcher(QtWidgets.QOpenGLWidget):
 
         self.vao = None
 
+        self.rotator = cycle(_rotate_around(25, 9.0))
+
     def recompile_shaders(self, path="./_gl/pikachu"):
         print("recompiling shaders..")
-
         try:
             vs = _read("{}/verts.glsl".format(path))
             fs = _read("{}/frags.glsl".format(path))
@@ -183,7 +266,7 @@ class FragmentWatcher(QtWidgets.QOpenGLWidget):
             self.u_campos.value = (0.0, 0.0, -10.0)
 
             self.u_focus = program["u_focus"]
-            self.u_focus.value = (0.0, 2.0, 0.0)
+            self.u_focus.value = (0.0, 1.5, 0.0)
 
             self.vao = _screen_quad(program, self.context)
 
@@ -206,9 +289,8 @@ class FragmentWatcher(QtWidgets.QOpenGLWidget):
         if self.vao:
             t = time.time() - self.start_time
             self.u_time.value = t
-            x = math.cos(t) * +10.0
-            z = math.sin(t) * -10.0
-            self.u_campos.value = (x, 0.0, z)
+
+            self.u_campos.value = next(self.rotator)[0]
             self.vao.render()
             self.update()
 
@@ -245,80 +327,30 @@ def main():
         if not os.path.isdir("pika"):
             os.makedirs("pika")
 
-        u_campos = (0.0, 0.0, -10.0)
-        u_focus = (0.0, 2.0, 0.0)
-
-        if False:
+        if True:
             gif_writer = ii.get_writer("./pika/pikachu.gif", fps=24)
             mp4_writer = ii.get_writer("./pika/pikachu.mp4", fps=24)
-            for data in _screenspace_generation(
-                    304, 304,
-                    "./_gl/pikachu/verts.glsl",
-                    "./_gl/pikachu/frags.glsl",
-                    start_time=2.4, end_time=8.64316, frames=64,
-                    u_campos=u_campos, u_focus=u_focus):
-                gif_writer.append_data(data)
-                mp4_writer.append_data(data)
 
-        if True:
-            atlas_resolution = 2048
-            n_row = 5
-            w = atlas_resolution // n_row
-            atlas = Image.new("RGBA", (2048, 2048))
+            vs = "./_gl/pikachu/verts.glsl"
+            fs = "./_gl/pikachu/frags.glsl"
+            res = 1024
+            for is_atlas, img_data in _screenspace_imposter_generation(vs, fs, atlas_resolution=res):
+                if is_atlas:
+                    Image.fromarray(img_data).save("./pika/T_PikachuAtlas.png")
+                    break
 
-            half = 0.5 / n_row
-            distance = 10.0
-            pi = math.pi
-            for i in range(n_row * n_row):
-                u = i % n_row
-                v = i // n_row
-
-                ur = u / n_row + half
-                vr = v / n_row + half
-
-                yr = abs(0.5 - vr) * 2.0
-                xzr = math.cos(math.atan2(yr, 1.0))
-                ra = 2.0 * -pi * ur
-
-                x = math.cos(ra) * distance * xzr
-                y = yr * distance
-                z = math.sin(ra) * distance * xzr
-
-                # todo: campos inplace to pipeline
-                u_campos = (x, y, z)
-                for data in _screenspace_generation(
-                        w, w,
-                        "./_gl/pikachu/verts.glsl",
-                        "./_gl/pikachu/frags.glsl",
-                        u_campos=u_campos, u_focus=u_focus):
-
-                    x = i % n_row
-                    y = i // n_row
-                    img = Image.fromarray(data)
-                    paste_at = (u * w, v * w)
-                    atlas.paste(img, paste_at)
-            atlas.save("./pika/T_PikachuAtlas.png")
-
-        if False:
-            i = 0
-            for data in _screenspace_generation(
-                    300, 300,
-                    "./_gl/pikachu/verts.glsl",
-                    "./_gl/pikachu/frags.glsl",
-                    start_time=2.4, end_time=2.2,
-                    u_campos=u_campos, u_focus=u_focus):
-                ii.imwrite("./pika/pikachu_{}.png".format(i), data)
-                i += 1
+                gif_writer.append_data(img_data)
+                mp4_writer.append_data(img_data)
 
         return
 
-    width, height = 200, 200
+    w = 400
 
     app = QtWidgets.QApplication([])
     mainwin = QtWidgets.QMainWindow()
     mainwin.setWindowTitle("Pikachu Renderer")
 
-    tool = Tool(width, height)
+    tool = Tool(w, w)
     mainwin.setCentralWidget(tool)
     mainwin.setWindowFlags(Qt.WindowStaysOnTopHint)
     mainwin.show()
