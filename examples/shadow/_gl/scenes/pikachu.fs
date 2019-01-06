@@ -350,16 +350,14 @@ float world(vec3 p, inout vec3 base_color)
 {
     float _rad = 1.5;
 
-    // float floor = abs(-0.0 - p.y);
-    // if (floor < SURFACE)
-    // {
-    //     base_color = vec3(0.25);
-    //     return floor;
-    // }
+    float floor = abs(0.0 - p.y);
+    if (floor < SURFACE)
+    {
+        base_color = vec3(0.25, 0.25, 0.25);
+    }
 
     float _pikachu = pikachu(p, base_color);
-    // float d = min(floor, _pikachu);
-    return _pikachu;
+    return min(floor, _pikachu);
 }
 
 float raymarch(vec3 o, vec3 r, inout vec3 base_color)
@@ -475,7 +473,7 @@ void main()
     mat3 _look = lookat(u_campos, u_focus, 0.0);
     r = _look * r;
 
-    vec3 base_color = vec3(0.0, 0.0, 0.0);
+    vec3 base_color = vec3(0.2, 0.3, 0.7);
     float d = raymarch(u_campos, r, base_color);
 
     vec3 hdr = base_color;
@@ -513,7 +511,8 @@ void main()
     vec3 ldr = aces_film_tonemap(hdr);
 
     out_color.xyz = ldr;
-    out_color.w = alpha;
+    // out_color.w = alpha;
+    out_color.w = 1.0;
 
     out_uv = v_uvs;
     out_time = u_time;

@@ -2,6 +2,7 @@
 import os
 import time
 import math
+from functools import partial
 
 import numpy as np
 import moderngl as mg
@@ -160,7 +161,7 @@ class ComputeShaderViewer(QtWidgets.QLabel):
 
 
 class FragmentWatcher(QtWidgets.QOpenGLWidget):
-    def __init__(self, size):
+    def __init__(self, size, fspath):
         super(FragmentWatcher, self).__init__()
 
         self.size = size
@@ -168,24 +169,34 @@ class FragmentWatcher(QtWidgets.QOpenGLWidget):
         self.setMaximumSize(size[0], size[1])
         self.watch_path = "./_gl/"
 
+        self.fspath = fspath
+
         self.vao = None
 
-    def recompile_shaders(self, path="./_gl/pikachu"):
-        print("recompiling shaders..")
+    def recompile_shaders(self, path):
+        print("recompiling shaders..", path)
 
         try:
-            vs = _read("{}/verts.glsl".format(path))
-            fs = _read("{}/frags.glsl".format(path))
+            vs = _read("./_gl/simple.vs")
+            fs = _read(path)
 
             program = self.context.program(vertex_shader=vs, fragment_shader=fs)
             self.u_time = program["u_time"]
             self.u_campos = program["u_campos"]
-            self.u_campos.value = (0.0, 0.0, -10.0)
+            self.u_campos.value = (0.0, 5.0, -10.0)
 
             self.u_focus = program["u_focus"]
             self.u_focus.value = (0.0, 2.0, 0.0)
 
             self.vao = _screen_quad(program, self.context)
+
+            kju_data = ii.imread("./_tex/kju_sq.jpg")
+            tex_w = kju_data.shape[0]
+            tex_h = kju_data.shape[1]
+            tex_c = kju_data.shape[2]
+
+            _tex = self.context.texture((tex_w, tex_h), tex_c, kju_data.tobytes())
+            _tex.use(0)
 
         except Exception as e:
             print("failed to compile shaders, {}".format(e))
@@ -193,24 +204,46 @@ class FragmentWatcher(QtWidgets.QOpenGLWidget):
 
         print("recompiled shaders!")
 
+    def start_recording(self):
+        if not os.path.isdir("./yeon"):
+            os.makedirs("./yeon")
+        self.mp4_writer = ii.get_writer("./yeon/yeon.mp4", fps=24)
+        self.is_recording = True
+
     def initializeGL(self):
         self.context = mg.create_context()
         self.start_time = time.time()
-        self.recompile_shaders()
+        self.recompile_shaders(self.fspath)
 
         self.observer = QtObserver(self.watch_path)
-        self.observer.signal_glue.connect(self.recompile_shaders)
+        self.observer.signal_glue.connect(partial(self.recompile_shaders, self.fspath))
         self.observer.start()
+
+        self.tex = self.context.texture(self.size, 4, dtype='f4')
+        self.frame_buffer = self.context.framebuffer([self.tex])
+
+        self.is_recording = False
+        if False:
+            self.start_recording()
 
     def paintGL(self):
         if self.vao:
             t = time.time() - self.start_time
             self.u_time.value = t
-            x = math.cos(t) * +10.0
-            z = math.sin(t) * -10.0
-            self.u_campos.value = (x, 0.0, z)
+            x = math.cos(t) * +7.0
+            z = math.sin(t) * -7.0
+            self.u_campos.value = (x, 4.0, z)
             self.vao.render()
             self.update()
+
+            if self.is_recording:
+                self.frame_buffer.use()
+                self.vao.render()
+                data = self.tex.read()
+                data = np.frombuffer(data, dtype='f4')
+                data = data.reshape(self.size[1], self.size[0], 4)
+                data = _flatten_array(data)
+                self.mp4_writer.append_data(data)
 
 
 class Tool(QtWidgets.QWidget):
@@ -228,9 +261,10 @@ class Tool(QtWidgets.QWidget):
 
         self.path_le = QtWidgets.QLineEdit()
         shaders_layout.addWidget(self.path_le)
-        self.path_le.setText("./_gl/pikachu")
+        fspath = "./_gl/scenes/pikachu.fs"
+        self.path_le.setText(fspath)
 
-        self.renderer = FragmentWatcher((width, height))
+        self.renderer = FragmentWatcher((width, height), fspath)
         root_layout.addWidget(self.renderer)
 
         self.path_le.returnPressed.connect(self.recompile)
@@ -241,33 +275,42 @@ class Tool(QtWidgets.QWidget):
 
 
 def main():
-    if True:
+    # serialize result
+    if False:
         if not os.path.isdir("pika"):
             os.makedirs("pika")
 
-        u_campos = (0.0, 0.0, -10.0)
+        vs = "./_gl/simple.vs"
+        fs = "./_gl/scenes/zupang.fs"
+
+        distance = 10.0
+        u_campos = (0.0, 10.0, -10.0)
         u_focus = (0.0, 2.0, 0.0)
 
-        if False:
-            gif_writer = ii.get_writer("./pika/pikachu.gif", fps=24)
-            mp4_writer = ii.get_writer("./pika/pikachu.mp4", fps=24)
-            for data in _screenspace_generation(
-                    304, 304,
-                    "./_gl/pikachu/verts.glsl",
-                    "./_gl/pikachu/frags.glsl",
-                    start_time=2.4, end_time=8.64316, frames=64,
-                    u_campos=u_campos, u_focus=u_focus):
-                gif_writer.append_data(data)
-                mp4_writer.append_data(data)
-
+        # gif/mp4
         if True:
+            gif_writer = ii.get_writer("./zupang/zupang.gif", fps=24)
+            mp4_writer = ii.get_writer("./zupang/zupang.mp4", fps=24)
+
+            for i in range(64):
+                x, y, z = math.cos(i * 0.15) * distance, 2.5, math.sin(i * 0.15) * distance
+                u_campos = (x, y, z)
+                for data in _screenspace_generation(
+                        304, 304,
+                        vs, fs,
+                        start_time=0.0, end_time=0.0, frames=1,
+                        u_campos=u_campos, u_focus=u_focus):
+                    gif_writer.append_data(data)
+                    mp4_writer.append_data(data)
+
+        # atlas
+        if False:
             atlas_resolution = 2048
             n_row = 5
             w = atlas_resolution // n_row
             atlas = Image.new("RGBA", (2048, 2048))
 
             half = 0.5 / n_row
-            distance = 10.0
             pi = math.pi
             for i in range(n_row * n_row):
                 u = i % n_row
@@ -288,8 +331,7 @@ def main():
                 u_campos = (x, y, z)
                 for data in _screenspace_generation(
                         w, w,
-                        "./_gl/pikachu/verts.glsl",
-                        "./_gl/pikachu/frags.glsl",
+                        vs, fs,
                         u_campos=u_campos, u_focus=u_focus):
 
                     x = i % n_row
@@ -297,30 +339,29 @@ def main():
                     img = Image.fromarray(data)
                     paste_at = (u * w, v * w)
                     atlas.paste(img, paste_at)
-            atlas.save("./pika/T_PikachuAtlas.png")
+            atlas.save("./zupang/T_ZupangAtlas.png")
 
+        # screenshot
         if False:
             i = 0
             for data in _screenspace_generation(
-                    300, 300,
-                    "./_gl/pikachu/verts.glsl",
-                    "./_gl/pikachu/frags.glsl",
+                    512, 512,
+                    vs, fs,
                     start_time=2.4, end_time=2.2,
                     u_campos=u_campos, u_focus=u_focus):
-                ii.imwrite("./pika/pikachu_{}.png".format(i), data)
+                ii.imwrite("./zupang/zupang_{}.png".format(i), data)
                 i += 1
 
         return
 
-    width, height = 200, 200
-
     app = QtWidgets.QApplication([])
     mainwin = QtWidgets.QMainWindow()
-    mainwin.setWindowTitle("Pikachu Renderer")
-
-    tool = Tool(width, height)
-    mainwin.setCentralWidget(tool)
     mainwin.setWindowFlags(Qt.WindowStaysOnTopHint)
+    mainwin.setWindowTitle("Yeoneochobap Renderer")
+
+    w, h = 300, 300
+    tool = Tool(w, h)
+    mainwin.setCentralWidget(tool)
     mainwin.show()
 
     app.exec()
