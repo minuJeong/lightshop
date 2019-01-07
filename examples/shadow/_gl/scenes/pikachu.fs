@@ -17,6 +17,7 @@ author: minu jeong
 uniform float u_time;
 uniform vec3 u_focus;
 uniform vec3 u_campos;
+uniform bool u_drawbg;
 
 in vec2 v_uvs;
 
@@ -348,16 +349,21 @@ float pikachu(vec3 p, inout vec3 base_color)
 
 float world(vec3 p, inout vec3 base_color)
 {
+ 
     float _rad = 1.5;
 
-    float floor = abs(0.0 - p.y);
-    if (floor < SURFACE)
+    float dist = pikachu(p, base_color);
+    if (u_drawbg)
     {
-        base_color = vec3(0.25, 0.25, 0.25);
-    }
+        float floor = abs(0.0 - p.y);
+        if (floor < SURFACE)
+        {
+            base_color = vec3(0.25, 0.25, 0.25);
+        }
 
-    float _pikachu = pikachu(p, base_color);
-    return min(floor, _pikachu);
+        dist = min(dist, floor);
+    }
+    return dist;
 }
 
 float raymarch(vec3 o, vec3 r, inout vec3 base_color)
@@ -511,8 +517,7 @@ void main()
     vec3 ldr = aces_film_tonemap(hdr);
 
     out_color.xyz = ldr;
-    // out_color.w = alpha;
-    out_color.w = 1.0;
+    out_color.w = alpha;
 
     out_uv = v_uvs;
     out_time = u_time;

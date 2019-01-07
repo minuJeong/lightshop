@@ -25,6 +25,60 @@ from _common import _screen_quad
 from _common import _flatten_array
 
 
+def _rotate_around(n_row=9, distance=10):
+    half = 0.5 / n_row
+    pi = math.pi
+    for i in range(n_row * n_row):
+        u = i % n_row
+        v = i // n_row
+
+        ur = u / n_row + half
+        vr = v / n_row + half
+
+        yr = abs(0.5 - vr) * 2.0
+        xzr = math.cos(math.atan2(yr, 1.0))
+        ra = 2.0 * -pi * ur
+
+        x = math.cos(ra) * distance * xzr
+        y = yr * distance
+        z = math.sin(ra) * distance * xzr
+        yield (x, y, z), (u, v)
+
+
+def _imposter_gen(res, vs, fs, n_row=9, dist=10):
+    context = mg.create_standalone_context()
+    vs = _read(vs)
+    fs = _read(fs)
+    program = context.program(vertex_shader=vs, fragment_shader=fs)
+    vao = _screen_quad(program, context)
+
+    u_campos = program['u_campos']
+    if "u_drawbg" in program:
+        program["u_drawbg"].value = False
+
+    atlas = Image.new("RGBA", (res, res))
+    winw, winh = int(res / n_row), int(res / n_row)
+    window_tex = context.texture((winw, winh), 4, dtype="f4")
+    frame = context.framebuffer([window_tex])
+    frame.use()
+
+    for pos, uv in _rotate_around(n_row, dist):
+        u_campos.value = pos
+        vao.render()
+
+        u = uv[0] * winw
+        v = uv[1] * winh
+
+        data = np.frombuffer(window_tex.read(), dtype="f4")
+        data = data.reshape((winw, winh, 4))
+        data = _flatten_array(data)
+        img = Image.fromarray(data)
+
+        atlas.paste(img, (u, v))
+
+    return atlas
+
+
 def _screenspace_generation(
             width, height,
             vspath, fspath,
@@ -276,9 +330,15 @@ class Tool(QtWidgets.QWidget):
 
 def main():
     # serialize result
-    if False:
+    if True:
         if not os.path.isdir("pika"):
             os.makedirs("pika")
+
+        if not os.path.isdir("./zupang"):
+            os.makedirs("./zupang")
+
+        if not os.path.isdir("./yeon"):
+            os.makedirs("./yeon")
 
         vs = "./_gl/simple.vs"
         fs = "./_gl/scenes/zupang.fs"
@@ -288,7 +348,7 @@ def main():
         u_focus = (0.0, 2.0, 0.0)
 
         # gif/mp4
-        if True:
+        if False:
             gif_writer = ii.get_writer("./zupang/zupang.gif", fps=24)
             mp4_writer = ii.get_writer("./zupang/zupang.mp4", fps=24)
 
@@ -303,43 +363,11 @@ def main():
                     gif_writer.append_data(data)
                     mp4_writer.append_data(data)
 
-        # atlas
-        if False:
-            atlas_resolution = 2048
-            n_row = 5
-            w = atlas_resolution // n_row
-            atlas = Image.new("RGBA", (2048, 2048))
-
-            half = 0.5 / n_row
-            pi = math.pi
-            for i in range(n_row * n_row):
-                u = i % n_row
-                v = i // n_row
-
-                ur = u / n_row + half
-                vr = v / n_row + half
-
-                yr = abs(0.5 - vr) * 2.0
-                xzr = math.cos(math.atan2(yr, 1.0))
-                ra = 2.0 * -pi * ur
-
-                x = math.cos(ra) * distance * xzr
-                y = yr * distance
-                z = math.sin(ra) * distance * xzr
-
-                # todo: campos inplace to pipeline
-                u_campos = (x, y, z)
-                for data in _screenspace_generation(
-                        w, w,
-                        vs, fs,
-                        u_campos=u_campos, u_focus=u_focus):
-
-                    x = i % n_row
-                    y = i // n_row
-                    img = Image.fromarray(data)
-                    paste_at = (u * w, v * w)
-                    atlas.paste(img, paste_at)
-            atlas.save("./zupang/T_ZupangAtlas.png")
+        if True:
+            vs = "./_gl/simple.vs"
+            fs = "./_gl/scenes/pikachu.fs"
+            atlas = _imposter_gen(2048, vs, fs)
+            atlas.save("./zupang/T_PikachuAtlas.png")
 
         # screenshot
         if False:
@@ -357,7 +385,7 @@ def main():
     app = QtWidgets.QApplication([])
     mainwin = QtWidgets.QMainWindow()
     mainwin.setWindowFlags(Qt.WindowStaysOnTopHint)
-    mainwin.setWindowTitle("Yeoneochobap Renderer")
+    mainwin.setWindowTitle("Imposter Renderer")
 
     w, h = 300, 300
     tool = Tool(w, h)
