@@ -364,10 +364,22 @@ def main():
                     mp4_writer.append_data(data)
 
         if True:
+            res = 256
+            n_row = 5
+
             vs = "./_gl/simple.vs"
+
             fs = "./_gl/scenes/pikachu.fs"
-            atlas = _imposter_gen(2048, vs, fs)
-            atlas.save("./zupang/T_PikachuAtlas.png")
+            _imposter_gen(res, vs, fs, n_row=n_row).save("./pika/T_PikachuAtlas.png")
+
+            fs = "./_gl/scenes/zupang.fs"
+            _imposter_gen(res, vs, fs, n_row=n_row).save("./zupang/T_ZucatAtlas.png")
+
+            fs = "./_gl/scenes/yeon.fs"
+            _imposter_gen(res, vs, fs, n_row=n_row).save("./yeon/T_YeonAtlas.png")
+
+            fs = "./_gl/scenes/yeon.fs"
+            _imposter_gen(4096, vs, fs, n_row=25).save("./yeon/T_YeonAtlas_HIGH.png")
 
         # screenshot
         if False:

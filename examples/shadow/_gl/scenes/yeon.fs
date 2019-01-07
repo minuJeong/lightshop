@@ -15,6 +15,7 @@ author: minu jeong
 uniform float u_time;
 uniform vec3 u_focus;
 uniform vec3 u_campos;
+uniform bool u_drawbg;
 
 layout(binding=0) uniform sampler2D u_kjutex;
 
@@ -597,22 +598,28 @@ float world(vec3 p, inout vec3 base_color)
 {
     float _rad = 1.5;
 
-    float floor = abs(0.0 - p.y);
-    if (floor < SURFACE)
-    {
-        base_color = vec3(0.25, 0.25, 0.25);
-    }
+
+    
 
     float _yeon = yeon(p, base_color);
     float _suryeong = suryeong(p, base_color);
     float _keyboard = keyboard(p, base_color);
     float _mouse = mouse(p, base_color);
 
-    float d = floor;
-    d = min(d, _yeon);
+    float d = _yeon;
     d = min(d, _suryeong);
     d = min(d, _keyboard);
     d = min(d, _mouse);
+
+    if (u_drawbg)
+    {
+        float floor = abs(0.0 - p.y);
+        if (floor < SURFACE)
+        {
+            base_color = vec3(0.25, 0.25, 0.25);
+        }
+        d = min(d, floor);
+    }
     return d;
 }
 
@@ -724,14 +731,16 @@ void main()
 
     vec2 uv = v_uvs - 0.5;
     vec3 origin = u_campos;
-    if (uv.x > 0.0)
-    {
-        origin = rotate_y(u_campos, PI);
-    }
 
-    uv.x *= 2.0;
-    uv.x = uv.x - floor(uv.x / 2.0);
-    uv.x -= 0.5;
+    // split drawing
+    // if (uv.x > 0.0)
+    // {
+    //     origin = rotate_y(u_campos, PI);
+    // }
+    // uv.x *= 2.0;
+    // uv.x = uv.x - floor(uv.x / 2.0);
+    // uv.x -= 0.5;
+
     vec3 r = vec3(uv, 1.0);
     r = normalize(r);
 
