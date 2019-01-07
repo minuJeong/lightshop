@@ -596,23 +596,17 @@ float mouse(vec3 p, inout vec3 base_color)
 
 float world(vec3 p, inout vec3 base_color)
 {
-    float _rad = 1.5;
-
-
-    
-
     float _yeon = yeon(p, base_color);
-    float _suryeong = suryeong(p, base_color);
-    float _keyboard = keyboard(p, base_color);
-    float _mouse = mouse(p, base_color);
-
     float d = _yeon;
-    d = min(d, _suryeong);
-    d = min(d, _keyboard);
-    d = min(d, _mouse);
 
     if (u_drawbg)
     {
+        float _suryeong = suryeong(p, base_color);
+        float _keyboard = keyboard(p, base_color);
+        float _mouse = mouse(p, base_color);
+        d = min(d, _suryeong);
+        d = min(d, _keyboard);
+        d = min(d, _mouse);
         float floor = abs(0.0 - p.y);
         if (floor < SURFACE)
         {

@@ -79,6 +79,50 @@ def _imposter_gen(res, vs, fs, n_row=9, dist=10):
     return atlas
 
 
+def _imposter_gen_buffers(res, vs, fs, n_row=9, dist=10):
+    context = mg.create_standalone_context()
+    vs = _read(vs)
+    fs = _read(fs)
+    program = context.program(vertex_shader=vs, fragment_shader=fs)
+    vao = _screen_quad(program, context)
+
+    u_campos = program['u_campos']
+    if "u_drawbg" in program:
+        program["u_drawbg"].value = False
+
+    atlas_albedo = Image.new("RGBA", (res, res))
+    atlas_normal = Image.new("RGBA", (res, res))
+    winw, winh = int(res / n_row), int(res / n_row)
+
+    albedo_tex = context.texture((winw, winh), 4, dtype="f4")
+    normal_tex = context.texture((winw, winh), 4, dtype="f4")
+
+    frame = context.framebuffer([albedo_tex, normal_tex])
+    frame.use()
+
+    for pos, uv in _rotate_around(n_row, dist):
+        u_campos.value = pos
+        vao.render()
+
+        u = uv[0] * winw
+        v = uv[1] * winh
+
+        data = np.frombuffer(albedo_tex.read(), dtype="f4")
+        data = data.reshape((winw, winh, 4))
+        data = _flatten_array(data)
+        img_albedo = Image.fromarray(data)
+
+        data = np.frombuffer(normal_tex.read(), dtype="f4")
+        data = data.reshape((winw, winh, 4))
+        data = _flatten_array(data)
+        img_normal = Image.fromarray(data)
+
+        atlas_albedo.paste(img_albedo, (u, v))
+        atlas_normal.paste(img_normal, (u, v))
+
+    return atlas_albedo, atlas_normal
+
+
 def _screenspace_generation(
             width, height,
             vspath, fspath,
@@ -364,22 +408,19 @@ def main():
                     mp4_writer.append_data(data)
 
         if True:
-            res = 256
-            n_row = 5
+            res = 1024
+            n_row = 8
 
             vs = "./_gl/simple.vs"
+            fs = "./_gl/scenes/pikachu_buffers.fs"
 
-            fs = "./_gl/scenes/pikachu.fs"
-            _imposter_gen(res, vs, fs, n_row=n_row).save("./pika/T_PikachuAtlas.png")
+            # _imposter_gen(res, vs, fs, n_row=n_row).save("./pika/T_PikachuAtlas.png")
 
-            fs = "./_gl/scenes/zupang.fs"
-            _imposter_gen(res, vs, fs, n_row=n_row).save("./zupang/T_ZucatAtlas.png")
-
-            fs = "./_gl/scenes/yeon.fs"
-            _imposter_gen(res, vs, fs, n_row=n_row).save("./yeon/T_YeonAtlas.png")
-
-            fs = "./_gl/scenes/yeon.fs"
-            _imposter_gen(4096, vs, fs, n_row=25).save("./yeon/T_YeonAtlas_HIGH.png")
+            albedo, normal = _imposter_gen_buffers(
+                res, vs, fs,
+                n_row=n_row, dist=8.0)
+            albedo.save("./pika/T_PikachuAtlas_albedo.png")
+            normal.save("./pika/T_PikachuAtlas_normal.png")
 
         # screenshot
         if False:
